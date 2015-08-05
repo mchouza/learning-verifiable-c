@@ -7,23 +7,39 @@ Require Import strlen.
 
 Local Open Scope logic.
 
-(* TO BE DONE *)
+Definition make_nth_func
+  {A:Type} (l:list A) (def:A) (n:Z) :=
+  nth (Z.to_nat n) l def.
+
+Definition Z_to_val (a:Z) := Vint (Int.repr a).
+
 Definition my_strlen_spec :=
   DECLARE _my_strlen
-    WITH a:Z, b:Z
-    PRE [ _a OF tuint, _b OF tuint ]
-      PROP (0 <= a <= Int.max_unsigned;
-            0 <= b <= Int.max_unsigned)
-      LOCAL (`(eq (Vint (Int.repr a)))
-                  (eval_id _a);
-             `(eq (Vint (Int.repr b)))
-                  (eval_id _b))
-      SEP()
+    WITH str: list Z, len: nat, sh: share, s: val
+    PRE [ _s OF tptr tuchar ]
+      PROP ((len <= length str)%nat;
+            (nth len str 1) = 0;
+            (forall m, (m < len)%nat -> (nth m str 0) <> 0))
+      LOCAL (`(eq s) (eval_id _s))
+      SEP(`(array_at tuchar sh 
+                     (make_nth_func (map Z_to_val str)
+                                    (Z_to_val 1))
+                     0 (Z.of_nat (length str)) s))
     POST [ tuint ]
       PROP ()
-      LOCAL (`(eq (Vint (Int.repr (a + b))))
+      LOCAL (`(eq (Vint (Int.repr (Z.of_nat len))))
              retval)
       SEP ().
 
 Definition Vprog : varspecs := nil.
 Definition Gprog : funspecs := my_strlen_spec :: nil.
+
+Lemma body_my_strlen:
+  semax_body Vprog Gprog f_my_strlen my_strlen_spec.
+Proof.
+  start_function.
+  name i _i.
+  name c _c.
+  forward.
+(** FIXME: IN PROGRESS **)
+    

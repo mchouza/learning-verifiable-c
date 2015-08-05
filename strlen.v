@@ -14,13 +14,14 @@ Definition ___builtin_annot_intval : ident := 10%positive.
 Definition ___builtin_negl : ident := 3%positive.
 Definition ___builtin_write32_reversed : ident := 2%positive.
 Definition ___builtin_write16_reversed : ident := 1%positive.
-Definition _main : ident := 36%positive.
+Definition _my_strlen : ident := 36%positive.
 Definition ___builtin_read16_reversed : ident := 31%positive.
 Definition ___builtin_va_copy : ident := 14%positive.
 Definition ___builtin_mull : ident := 6%positive.
 Definition ___builtin_fmin : ident := 26%positive.
 Definition ___builtin_bswap : ident := 19%positive.
 Definition ___builtin_membar : ident := 11%positive.
+Definition _main : ident := 37%positive.
 Definition ___builtin_addl : ident := 4%positive.
 Definition ___builtin_fmsub : ident := 28%positive.
 Definition ___builtin_fabs : ident := 7%positive.
@@ -32,9 +33,9 @@ Definition ___builtin_fmadd : ident := 27%positive.
 Definition _s : ident := 33%positive.
 Definition ___builtin_fmax : ident := 25%positive.
 Definition ___builtin_va_end : ident := 15%positive.
-Definition _len : ident := 34%positive.
+Definition _i : ident := 34%positive.
 Definition ___builtin_fnmadd : ident := 29%positive.
-Definition _my_strlen : ident := 35%positive.
+Definition _c : ident := 35%positive.
 Definition ___builtin_fnmsub : ident := 30%positive.
 Definition ___builtin_ctz : ident := 23%positive.
 Definition ___builtin_bswap32 : ident := 20%positive.
@@ -45,22 +46,29 @@ Definition f_my_strlen := {|
   fn_callconv := cc_default;
   fn_params := ((_s, (tptr tschar)) :: nil);
   fn_vars := nil;
-  fn_temps := ((_len, tuint) :: nil);
+  fn_temps := ((_i, tuint) :: (_c, tschar) :: nil);
   fn_body :=
 (Ssequence
-  (Sset _len (Econst_int (Int.repr 0) tint))
+  (Sset _i (Econst_int (Int.repr 0) tint))
   (Ssequence
-    (Swhile
-      (Ebinop One (Ederef (Etempvar _s (tptr tschar)) tschar)
-        (Econst_int (Int.repr 0) tint) tint)
-      (Ssequence
-        (Sset _len
-          (Ebinop Oadd (Etempvar _len tuint) (Econst_int (Int.repr 1) tint)
-            tuint))
-        (Sset _s
-          (Ebinop Oadd (Etempvar _s (tptr tschar))
-            (Econst_int (Int.repr 1) tint) (tptr tschar)))))
-    (Sreturn (Some (Etempvar _len tuint)))))
+    (Sset _c
+      (Ecast
+        (Ederef
+          (Ebinop Oadd (Etempvar _s (tptr tschar)) (Etempvar _i tuint)
+            (tptr tschar)) tschar) tschar))
+    (Ssequence
+      (Swhile
+        (Ebinop One (Etempvar _c tschar) (Econst_int (Int.repr 0) tint) tint)
+        (Ssequence
+          (Sset _i
+            (Ebinop Oadd (Etempvar _i tuint) (Econst_int (Int.repr 1) tint)
+              tuint))
+          (Sset _c
+            (Ecast
+              (Ederef
+                (Ebinop Oadd (Etempvar _s (tptr tschar)) (Etempvar _i tuint)
+                  (tptr tschar)) tschar) tschar))))
+      (Sreturn (Some (Etempvar _i tuint))))))
 |}.
 
 Definition prog : Clight.program := {|

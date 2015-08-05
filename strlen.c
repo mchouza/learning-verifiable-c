@@ -1,10 +1,11 @@
 unsigned my_strlen( const char *s )
 {
-	unsigned len = 0;
-	while (*s != '\0')
+	unsigned i = 0;
+	char c = s[i];
+	while (c != '\0')
 	{
-		len++;
-		s++;
+		i++;
+		c = s[i];
 	}
-	return len;
+	return i;
 }
