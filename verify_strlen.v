@@ -41,7 +41,7 @@ Proof.
 Qed.
 
 Definition assoc_array_cstr sh s id :=
-  array_at tuchar sh (make_nth_func (map Z_to_val s) (Z_to_val 1))
+  array_at tschar sh (make_nth_func (map Z_to_val s) (Z_to_val 1))
                   0 (Z.of_nat (length s)) id.
 
 Lemma val_is_vint:
@@ -70,11 +70,12 @@ Qed.
 Definition my_strlen_spec :=
   DECLARE _my_strlen
     WITH str: list Z, sh: share, s: val
-    PRE [ _s OF tptr tuchar ]
+    PRE [ _s OF tptr tschar ]
       PROP (is_cstring str = true;
             (cstring_len str) < Int.max_unsigned;
             (cstring_len str) < Zlength str)
-      LOCAL (`(eq s) (eval_id _s))
+      LOCAL (`(eq s) (eval_id _s);
+             `isptr (eval_id _s))
       SEP(`(assoc_array_cstr sh str s))
     POST [ tuint ]
       PROP ()
@@ -96,9 +97,45 @@ Proof.
   forward.
   {
     instantiate (1 := Zlength str).
+    instantiate (1 := (make_nth_func (map Z_to_val str)
+                                     (Z_to_val 1))).
+    instantiate (1 := sh).
     entailer!.
     + cut (cstring_len str >= 0).
       omega.
       apply cstring_len_ge_0.
-    +
+    + rewrite val_is_vint; simpl; auto.
+    + unfold assoc_array_cstr.
+      rewrite Zlength_correct.
+      entailer!.
+  }
+  forward_while
+    (EX i:Z,
+     PROP (forall j, 0 <= j < i -> (nth (Z.to_nat j) str 0) <> 0;
+           0 <= i <= (cstring_len str))
+     LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i))
+     SEP(`(assoc_array_cstr sh str s)))
+    (EX i:Z,
+     PROP (forall j, 0 <= j < i -> (nth (Z.to_nat j) str 0) <> 0;
+           0 <= i <= (cstring_len str))
+     LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i))
+     SEP(`(assoc_array_cstr sh str s))).
+  {
+    apply exp_right with 0.
+    entailer!.
+    + intros; omega.
+    + cut (cstring_len str >= 0).
+      omega.
+      apply cstring_len_ge_0.
+   }
+   {
+     entailer!.
+   }
+   {
+     apply exp_right with i.
+     entailer!.
+   }
+   {
+     forward.
+     forward.
 (** FIXME: IN PROGRESS **)
