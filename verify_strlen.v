@@ -17,9 +17,13 @@ Fixpoint is_cstring (s:list Z) :=
   match s with
   | nil => false
   | 0 :: _ => true
-  | Zneg _ :: _ => false
-  | c :: t => 
-      match Z_lt_dec c 256 with
+  | Zneg c :: t =>
+      match Z_ge_dec (Zneg c) (-128) with
+      | left _ => is_cstring t
+      | _ => false
+      end
+  | Zpos c :: t => 
+      match Z_lt_dec (Zpos c) 128 with
       | left _ => is_cstring t
       | _ => false
       end
@@ -76,17 +80,17 @@ Proof.
 Qed.
 
 Lemma cstr_contents:
-  forall (s:list Z) (i:nat),
+  forall (s:list Z) (i:nat) (d:Z),
   is_cstring s = true ->
-  (Z.of_nat i < cstring_len s -> (nth i s 0) <> 0) /\
-  (Z.of_nat i = cstring_len s -> (nth i s 1) = 0).
+  (Z.of_nat i < cstring_len s -> (nth i s d) <> 0) /\
+  (Z.of_nat i = cstring_len s -> (nth i s d) = 0).
 Proof.
   induction s.
   {
     simpl; intros i false_eq_true; discriminate.
   }
   {  
-    intros i Hcstr.
+    intros i d Hcstr.
     destruct a, i.
     + split.
       - simpl; intros; exfalso; omega.
@@ -113,41 +117,69 @@ Proof.
       - intros Hlt; apply IHs; auto; omega.
       - intros Heq; apply IHs; auto; omega.
       - simpl in *.
-        destruct (Z_lt_dec (Z.pos p) 256).
+        destruct (Z_lt_dec (Z.pos p) 128).
         * auto.
         * discriminate Hcstr.
-    + simpl in *; discriminate Hcstr.
-    + simpl in *; discriminate Hcstr.
+    + split.
+      - simpl; discriminate.
+      - simpl; intros Habs.
+        cut (cstring_len s >= 0).
+        intros cslen_ge_0; exfalso; omega.
+        apply cstring_len_ge_0.
+    + rewrite Z_of_nat_S_n.
+      cut (is_cstring s = true).
+      intros Hcstr'.
+      simpl.
+      split.
+      - intros Hlt; apply IHs; auto; omega.
+      - intros Heq; apply IHs; auto; omega.
+      - simpl in *.
+        destruct (Z_ge_dec (Z.neg p) (-128)).
+        * auto.
+        * discriminate Hcstr.
   }
 Qed.
 
 Lemma cstr_contents_not_null:
   forall (i:nat) (s:list Z),
-  Z.of_nat i < cstring_len s ->
-  nth i s 0 <> 0.
+  is_cstring s = true ->
+  Z.of_nat i <= cstring_len s ->
+  -128 <= nth i s 0 < 128.
 Proof.
   intros i s.
   generalize i; clear i.
   induction s.
   {
-    intros i.
-    cut (0 <= Z.of_nat i).
-    simpl; intros i_ge_0 i_lt_0; exfalso; omega.
-    apply Zle_0_nat.
+    simpl; discriminate.
   }
   {
-    intros i; destruct i.
-    + destruct a.
-      - simpl; intros O_lt_O; exfalso; omega.
-      - simpl; discriminate.
-      - simpl; discriminate.
-    + rewrite Z_of_nat_S_n; intros Si_lt_Scslen.
-      simpl in *.
-      apply IHs.
-      destruct a.
-      - exfalso; simpl in Si_lt_Scslen; omega.
-      - omega.
-      - omega.
+    destruct i, a.
+    + simpl; omega.
+    + simpl.
+      destruct (Z_lt_dec (Z.pos p) 128).
+      - intros _ _; split.
+        * discriminate.
+        * auto.
+      - discriminate.
+    + simpl.
+      destruct (Z_ge_dec (Z.neg p) (-128)).
+      - intros _ _; split.
+        * omega.
+        * unfold Z.lt; simpl; auto.
+      - discriminate.
+    + unfold Z.le; simpl; intros _ Habs; exfalso; auto.
+    + rewrite Z_of_nat_S_n.
+      simpl.
+      destruct (Z_lt_dec (Z.pos p) 128).
+      - intros is_cstr i_le_len.
+        apply IHs; auto; omega.
+      - discriminate.
+    + rewrite Z_of_nat_S_n.
+      simpl.
+      destruct (Z_ge_dec (Z.neg p) (-128)).
+      - intros is_cstr i_le_len.
+        apply IHs; auto; omega.
+      - discriminate.
   }
 Qed.  
       
@@ -197,9 +229,12 @@ Proof.
     (EX i:Z, EX c:Z,
      PROP (forall j, 0 <= j < i -> (nth (Z.to_nat j) str 0) <> 0;
            0 <= i <= (cstring_len str);
-           i < (cstring_len str) <-> c <> 0)
+           c = nth (Z.to_nat i) str 0;
+           -128 <= c < 128;
+           i < (cstring_len str) -> c <> 0;
+           i = (cstring_len str) -> c = 0)
      LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i);
-            `(eq (Vint (Int.repr c))) (eval_id _c);
+            `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
             `isptr (eval_id _s))
      SEP(`(assoc_array_cstr sh str s)))
     (EX i:Z,
@@ -216,8 +251,36 @@ Proof.
       omega.
       apply cstring_len_ge_0.
     + destruct str.
-      - simpl. 
-         
+      - simpl; omega.
+      - destruct z.
+        * simpl; omega.
+        * apply cstr_contents_not_null; auto.
+          cut (cstring_len str >= 0).
+          simpl; omega.
+          apply cstring_len_ge_0.
+        * apply cstr_contents_not_null; auto.
+          cut (cstring_len str >= 0).
+          simpl; omega.
+          apply cstring_len_ge_0.
+    + apply cstr_contents; auto.
+    + destruct str.
+      - simpl; auto.
+      - destruct z.
+        * simpl; auto.
+        * simpl in *.
+          cut (cstring_len str >= 0).
+          intros; exfalso; omega.
+          apply cstring_len_ge_0.
+        * simpl in *.
+          cut (cstring_len str >= 0).
+          intros; exfalso; omega.
+          apply cstring_len_ge_0.
+    + rewrite val_is_vint with
+        (l := str) (j := 1) (i := (Int.signed (Int.repr 0))) in H2.
+      inversion H2.
+      destruct str.
+      - discriminate H.
+      - simpl; auto.
   }
   {
     entailer!.
@@ -231,5 +294,7 @@ Proof.
     forward.
     entailer!.
     + instantiate (1 := Zlength str).
-       omega.
+      destruct (nth (Z.to_nat i) str 0).
+      - simpl in H10; discriminate H10.
+      - SearchAbout Int.sign_ext.
 (** FIXME: IN PROGRESS **)
