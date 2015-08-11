@@ -237,10 +237,8 @@ Proof.
             `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
             `isptr (eval_id _s))
      SEP(`(assoc_array_cstr sh str s)))
-    (EX i:Z,
-     PROP (forall j, 0 <= j < i -> (nth (Z.to_nat j) str 0) <> 0;
-           0 <= i <= (cstring_len str))
-     LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i))
+    (PROP ()
+     LOCAL (`(eq (Vint (Int.repr (cstring_len str)))) (eval_id _i))
      SEP(`(assoc_array_cstr sh str s))).
   {
     apply exp_right with 0.
@@ -286,15 +284,30 @@ Proof.
     entailer!.
   }
   {
-    apply exp_right with i.
     entailer!.
+    admit. (** FIXME **)
   }
   {
     forward.
     forward.
-    entailer!.
-    + instantiate (1 := Zlength str).
-      destruct (nth (Z.to_nat i) str 0).
-      - simpl in H10; discriminate H10.
-      - SearchAbout Int.sign_ext.
-(** FIXME: IN PROGRESS **)
+    instantiate (1 := Zlength str).
+    instantiate (1 := (make_nth_func (map Z_to_val str) (Z_to_val 1))).
+    instantiate (1 := sh).
+    { 
+      entailer!.
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
+    }
+    {
+      (** FIXME **)
+      apply exp_right with i.
+      apply exp_right with c.
+      entailer!.
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
+    }
+  }
+  forward.
+  + admit. (** FIXME **)
+Qed.
