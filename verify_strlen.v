@@ -31,11 +31,37 @@ Fixpoint cstring_len (s:list int) :=
   | nil => 0
   end.
 
+Lemma Zlength_one_xtra {A:Type}:
+  forall (a:A) l, Zlength (a :: l) = Zlength l + 1.
+Proof.
+  intros a l.
+  do 2 rewrite Zlength_correct; simpl.
+  rewrite Zpos_P_of_succ_nat; auto.
+Qed.
+
 Lemma cstring_len_bounds:
   forall str,
   is_cstring str -> 0 <= cstring_len str < Zlength str.
+Proof.
+  intros cstr His_cstr.
+  induction His_cstr.
+  + unfold Zlength; simpl; omega.
+  + rewrite Zlength_one_xtra.
+    destruct c; destruct intval; simpl; omega.
+  + rewrite Zlength_correct, app_length; simpl.
+    rewrite <-plus_n_Sm, <-plus_n_O; simpl.
+    rewrite Zpos_P_of_succ_nat, <-Zlength_correct.
 Admitted. (** FIXME **)
- 
+
+Lemma typecast_aux_lemma:
+  forall i str,
+  make_arr_fun (map Vint str) i =
+  Vint (nth (Z.to_nat i) str (Int.repr 1)).
+Proof.
+  intros i str.
+  unfold make_arr_fun, Znth; rewrite map_nth; simpl; auto.
+Qed.
+
 Definition my_strlen_spec :=
   DECLARE _my_strlen
     WITH str: list int, sh: share, s: val
@@ -69,7 +95,7 @@ Proof.
   {
     entailer!.
     + omega.
-    + unfold make_arr_fun, Znth; rewrite map_nth; simpl; auto.
+    + rewrite typecast_aux_lemma; simpl; auto.
   }
   forward_while
     (EX i:Z, EX c:Z,
@@ -92,7 +118,7 @@ Proof.
     apply exp_right with (Int.signed (nth 0 str (Int.repr 0))).
     entailer!.
     + intros x Hge Hlt; exfalso; omega.
-    + admit.
+    + admit. (** FIXME **)
   }
   {
     entailer!.
@@ -107,7 +133,7 @@ Proof.
     {
       entailer!.
       + admit. (** FIXME **)
-      + admit. (** FIXME **)
+      + rewrite typecast_aux_lemma; simpl; auto.
     }
     {
       apply exp_right with (i + 1).
@@ -115,7 +141,9 @@ Proof.
       entailer!.
       + admit. (** FIXME **)
       + admit. (** FIXME **)
-      + admit. (** FIXME **)
+      + rewrite typecast_aux_lemma in H4; simpl in H4.
+        inversion H4; simpl.
+        admit. (** FIXME **)
     }
   }
   forward.
