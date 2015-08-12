@@ -195,8 +195,7 @@ Definition my_strlen_spec :=
       SEP(`(assoc_array_cstr sh str s))
     POST [ tuint ]
       PROP ()
-      LOCAL (`(eq s) (eval_id _s);
-             `(eq (Vint (Int.repr (cstring_len str)))) retval)
+      LOCAL (`(eq (Vint (Int.repr (cstring_len str)))) retval)
       SEP (`(assoc_array_cstr sh str s)).
 
 Definition Vprog : varspecs := nil.
@@ -235,10 +234,12 @@ Proof.
            i = (cstring_len str) -> c = 0)
      LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i);
             `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
+            `(eq s) (eval_id _s);
             `isptr (eval_id _s))
      SEP(`(assoc_array_cstr sh str s)))
     (PROP ()
-     LOCAL (`(eq (Vint (Int.repr (cstring_len str)))) (eval_id _i))
+     LOCAL (`(eq (Vint (Int.repr (cstring_len str)))) (eval_id _i);
+            `(eq s) (eval_id _s))
      SEP(`(assoc_array_cstr sh str s))).
   {
     apply exp_right with 0.
@@ -296,18 +297,20 @@ Proof.
     { 
       entailer!.
       + admit. (** FIXME **)
-      + admit. (** FIXME **)
-      + admit. (** FIXME **)
+      + rewrite val_is_vint; simpl; auto.
+      + unfold assoc_array_cstr; rewrite Zlength_correct; entailer!.
     }
     {
-      (** FIXME **)
-      apply exp_right with i.
-      apply exp_right with c.
+      apply exp_right with (i + 1).
+      apply exp_right with (nth (Z.to_nat (i + 1)) str 0).
       entailer!.
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
+      + admit. (** FIXME **)
       + admit. (** FIXME **)
       + admit. (** FIXME **)
     }
   }
   forward.
-  + admit. (** FIXME **)
 Qed.
