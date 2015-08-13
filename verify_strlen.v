@@ -31,6 +31,25 @@ Fixpoint cstring_len (s:list int) :=
   | nil => 0
   end.
 
+Lemma char_eq:
+  forall a b,
+  -128 <= a < 128 -> -128 <= b < 128 ->
+  Int.repr a = Int.repr b ->
+  a = b.
+Proof.
+  assert (forall a, -128 <= a < 128 ->
+          Int.min_signed <= a <= Int.max_signed) as Hbound_gen.
+  { 
+    intros a' H.
+    unfold Int.min_signed, Int.max_signed, Int.half_modulus, Int.modulus,
+           Int.wordsize, Wordsize_32.wordsize in *.
+    simpl; omega.
+  }
+  intros a b Hbound_a Hbound_b Heq_repr.
+  rewrite <-Int.signed_repr with (z := a), <-Int.signed_repr with (z := b);
+  try rewrite Heq_repr; auto.
+Qed.  
+
 Lemma cstring_len_ge_0:
   forall str, cstring_len str >= 0.
 Proof.
@@ -56,14 +75,6 @@ Proof.
   cut (cstring_len str >= 0); try omega; apply cstring_len_ge_0.
 Qed.
 
-Lemma nth_cons_S:
-  forall (A:Type) (l:list A) (n:nat) (a d:A),
-  nth (S n) (a :: l) d = nth n l d.
-Proof.
-  intros A l n a d.
-  simpl; auto.
-Qed.
-
 Lemma cstring_char_values:
   forall str,
   is_cstring str ->
@@ -71,7 +82,36 @@ Lemma cstring_char_values:
   forall j, 0 <= j < (cstring_len str) ->
   (Znth (cstring_len str) str (Int.repr 1)) <> Int.repr 0.
 Proof.
-Admitted. (** FIXME **)
+  cut (forall n str,
+       (length str < n)%nat ->
+       is_cstring str ->
+       (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
+       forall j, 0 <= j < (cstring_len str) ->
+       (Znth (cstring_len str) str (Int.repr 1)) <> Int.repr 0).
+  intros Hgen str; apply Hgen with (n := S (length str)); omega.
+  unfold Znth; induction n.
+  + intros str Habs; exfalso; omega.
+  + intros str Hxlen Hxcstr; induction Hxcstr.
+    - split; simpl; try intros; auto; omega.
+    - rewrite <-Int.repr_signed with (i := c).
+      destruct (Int.signed c).
+      {
+        split; simpl; try intros; auto; omega.
+      }
+      {
+        rewrite cstring_len_nz_prefix, aux_str_len_succ_lemma; simpl.
+        + split.
+          - simpl in *; apply IHn; auto; omega.
+          - admit. (** FIXME **)
+        + intros Habs; cut (Z.pos p = 0).
+          - discriminate. 
+          - apply char_eq; auto; omega.
+      }
+      {
+        admit. (** FIXME: GENERALIZE REDUNDANT PARTS **)
+      }
+    - admit. (** FIXME **)
+Qed.
 
 Lemma cstring_len_bounds:
   forall str,
