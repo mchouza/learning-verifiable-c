@@ -50,6 +50,13 @@ Proof.
   try rewrite Heq_repr; auto.
 Qed.  
 
+Lemma char_zero_comp:
+  forall a, -128 <= a < 128 -> a <> 0 -> Int.repr a <> Int.repr 0.
+Proof.
+  intros a Hbound_a Habs Habs_repr.
+  apply Habs, char_eq; auto; omega.
+Qed.
+
 Lemma cstring_len_ge_0:
   forall str, cstring_len str >= 0.
 Proof.
@@ -76,22 +83,22 @@ Proof.
 Qed.
 
 Lemma cstring_char_values:
-  forall str,
+  forall str j,
   is_cstring str ->
   (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
-  forall j, 0 <= j < (cstring_len str) ->
-  (Znth (cstring_len str) str (Int.repr 1)) <> Int.repr 0.
+  (0 <= j < (cstring_len str) ->
+  (Znth j str (Int.repr 1)) <> Int.repr 0).
 Proof.
-  cut (forall n str,
+  cut (forall n str j,
        (length str < n)%nat ->
        is_cstring str ->
        (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
-       forall j, 0 <= j < (cstring_len str) ->
-       (Znth (cstring_len str) str (Int.repr 1)) <> Int.repr 0).
-  intros Hgen str; apply Hgen with (n := S (length str)); omega.
+       (0 <= j < (cstring_len str) ->
+       (Znth j str (Int.repr 1)) <> Int.repr 0)).
+  intros Hgen str j; apply Hgen with (n := S (length str)); omega.
   unfold Znth; induction n.
-  + intros str Habs; exfalso; omega.
-  + intros str Hxlen Hxcstr; induction Hxcstr.
+  + intros str j Habs; exfalso; omega.
+  + intros str j Hxlen Hxcstr; induction Hxcstr.
     - split; simpl; try intros; auto; omega.
     - rewrite <-Int.repr_signed with (i := c).
       destruct (Int.signed c).
@@ -102,10 +109,16 @@ Proof.
         rewrite cstring_len_nz_prefix, aux_str_len_succ_lemma; simpl.
         + split.
           - simpl in *; apply IHn; auto; omega.
-          - admit. (** FIXME **)
-        + intros Habs; cut (Z.pos p = 0).
-          - discriminate. 
-          - apply char_eq; auto; omega.
+          - intros Hbound_j.
+            assert (j = Z.of_nat (Z.to_nat j)) as H_j_repr.
+            symmetry; apply nat_of_Z_eq; omega.
+            destruct (Z.to_nat j).
+            * apply char_zero_comp; try discriminate; omega.
+            * rewrite <-nat_of_Z_of_nat with (n := n0).
+              unfold nat_of_Z; simpl in *.
+              rewrite Zpos_P_of_succ_nat in H_j_repr.
+              apply IHn; simpl in *; auto; omega.
+        + apply char_zero_comp; try discriminate; omega.
       }
       {
         admit. (** FIXME: GENERALIZE REDUNDANT PARTS **)
