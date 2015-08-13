@@ -23,7 +23,7 @@ Inductive is_cstring: list int -> Prop :=
 Fixpoint cstring_len (s:list int) :=
   match s with
   | c :: t =>
-    let (i, _) := c in
+    let i := Int.signed c in
     match i with
     | 0 => 0
     | _ => cstring_len t + 1
@@ -31,26 +31,52 @@ Fixpoint cstring_len (s:list int) :=
   | nil => 0
   end.
 
-Lemma Zlength_one_xtra {A:Type}:
-  forall (a:A) l, Zlength (a :: l) = Zlength l + 1.
+Lemma cstring_len_ge_0:
+  forall str, cstring_len str >= 0.
 Proof.
-  intros a l.
-  do 2 rewrite Zlength_correct; simpl.
-  rewrite Zpos_P_of_succ_nat; auto.
+  induction str; simpl; try case (Int.signed a); try intros; try omega.
 Qed.
+
+Lemma cstring_len_nz_prefix:
+  forall str a, 
+  a <> Int.repr 0 -> cstring_len (a :: str) = cstring_len str + 1.
+Proof.
+  intros str a Hnz.
+  assert (a = Int.repr (Int.signed a)) as Ha_repr.
+  symmetry; apply Int.repr_signed.
+  simpl; destruct (Int.signed a); auto; try contradiction.
+Qed.
+
+Lemma aux_str_len_succ_lemma:
+  forall str,
+  Z.to_nat (cstring_len str + 1) = S (Z.to_nat (cstring_len str)).
+Proof.
+  intros str.
+  rewrite Z2Nat.inj_add; simpl; try omega.
+  cut (cstring_len str >= 0); try omega; apply cstring_len_ge_0.
+Qed.
+
+Lemma nth_cons_S:
+  forall (A:Type) (l:list A) (n:nat) (a d:A),
+  nth (S n) (a :: l) d = nth n l d.
+Proof.
+  intros A l n a d.
+  simpl; auto.
+Qed.
+
+Lemma cstring_char_values:
+  forall str,
+  is_cstring str ->
+  (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
+  forall j, 0 <= j < (cstring_len str) ->
+  (Znth (cstring_len str) str (Int.repr 1)) <> Int.repr 0.
+Proof.
+Admitted. (** FIXME **)
 
 Lemma cstring_len_bounds:
   forall str,
   is_cstring str -> 0 <= cstring_len str < Zlength str.
 Proof.
-  intros cstr His_cstr.
-  induction His_cstr.
-  + unfold Zlength; simpl; omega.
-  + rewrite Zlength_one_xtra.
-    destruct c; destruct intval; simpl; omega.
-  + rewrite Zlength_correct, app_length; simpl.
-    rewrite <-plus_n_Sm, <-plus_n_O; simpl.
-    rewrite Zpos_P_of_succ_nat, <-Zlength_correct.
 Admitted. (** FIXME **)
 
 Lemma typecast_aux_lemma:
