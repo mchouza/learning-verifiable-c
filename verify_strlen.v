@@ -92,6 +92,24 @@ Proof.
       admit. (** FIXME **)
 Qed.      
 
+Lemma Z_S_nat:
+  forall n:nat,
+  Z.of_nat (S n) = Z.of_nat n + 1.
+Proof.
+  intros n.
+  rewrite plus_n_O with (n := n), plus_n_Sm at 1.
+  apply Nat2Z.inj_add.
+Qed.
+
+Lemma nat_Z_p_1:
+  forall z:Z,
+  z >= 0 -> Z.to_nat (z + 1) = S (Z.to_nat z).
+Proof.
+  intros z Hge0.
+  rewrite plus_n_O with (n := Z.to_nat z), plus_n_Sm at 1.
+  apply Z2Nat.inj_add; omega.
+Qed.
+
 Lemma aux_str_len_succ_lemma:
   forall str,
   Z.to_nat (cstring_len str + 1) = S (Z.to_nat (cstring_len str)).
@@ -101,6 +119,31 @@ Proof.
   cut (cstring_len str >= 0); try omega; apply cstring_len_ge_0.
 Qed.
 
+Lemma cstring_length_from_null:
+  forall str i,
+  0 <= i ->
+  Znth i str (Int.repr 1) = Int.repr 0 ->
+  (forall j, j < i -> Znth j str (Int.repr 0) <> Int.repr 0) ->
+  cstring_len str = i.
+Proof.
+  unfold Znth.
+  intros str i Hi_ge_0 Hnull_pos Hnon_null_before.
+  induction str.
+  + simpl in Hnull_pos; destruct (Z.to_nat i); exfalso;
+    apply char_zero_comp with (a := 1); auto; omega.
+  + destruct (eq_dec a (Int.repr 0)).
+    - destruct (eq_dec i 0).
+      * rewrite e, e0; simpl; auto.
+      * cut (0 < i). intros Hi_gt_0.
+        cut (a <> Int.repr 0). intros Ha_ne_0.
+        contradiction.
+        cut (nth (Z.to_nat 0) (a::str) (Int.repr 0) <> Int.repr 0).
+        simpl; auto.
+        apply Hnon_null_before; auto.
+        omega.
+   - admit. (** FIXME **)
+Qed.
+
 Lemma cstring_char_values:
   forall str j,
   is_cstring str ->
@@ -108,47 +151,35 @@ Lemma cstring_char_values:
   (0 <= j < (cstring_len str) ->
   (Znth j str (Int.repr 1)) <> Int.repr 0).
 Proof.
-  (* strong induction over the number of bytes *)
-  cut (forall n str j,
-       (length str < n)%nat ->
-       is_cstring str ->
-       (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
-       (0 <= j < (cstring_len str) ->
-       (Znth j str (Int.repr 1)) <> Int.repr 0)).
-  intros Hgen str j; apply Hgen with (n := S (length str)); omega.
-  unfold Znth; induction n.
-  (* trivial base case *)
-  + intros str j Habs; exfalso; omega.
-  (* main case, uses induction over C string definition *)
-  + intros str j Hxlen Hxcstr; induction Hxcstr.
-    (* empty C strings are easy *)
-    - split; simpl; try intros; auto; omega.
-    (* for prefixes we need to check if the first char is null *)
-    - rewrite <-Int.repr_signed with (i := c).
-      destruct (eq_dec (Int.signed c) 0).
-      {
-        (* a null prefix is easy to handle *)
-        rewrite e; split; simpl; auto; omega.
-      }
-      {
-        (* a non-null prefix just moves everything *)
-        rewrite cstring_len_nz_prefix, aux_str_len_succ_lemma; simpl.
-        (* TODO: ADD MORE COMMENTS *)
-        + split.
-          - simpl in *; apply IHn; auto; omega.
-          - intros Hbound_j.
-            assert (j = Z.of_nat (Z.to_nat j)) as H_j_repr.
-            symmetry; apply nat_of_Z_eq; omega.
-            destruct (Z.to_nat j).
-            * apply char_zero_comp; try discriminate; omega.
-            * rewrite <-nat_of_Z_of_nat with (n := n1).
-              unfold nat_of_Z; simpl in *.
-              rewrite Zpos_P_of_succ_nat in H_j_repr.
-              apply IHn; simpl in *; auto; omega.
-        + apply char_zero_comp; try discriminate; omega.
-      }
-    (* for suffixes we just have show the old values are OK *)
+  intros str j His_cstring.
+  generalize j; clear j.
+  unfold Znth.
+  induction His_cstring.
+  {
+    simpl; split; try intros; auto; omega.
+  }
+  {
+    rewrite <-Int.repr_signed with (i := c).
+    destruct (eq_dec (Int.signed c) 0).
+    + rewrite e; split; simpl; auto; omega.
+    + intros j; rewrite Int.repr_signed; simpl cstring_len; split.
+      - destruct (Int.signed c); try omega; simpl nth;
+        rewrite nat_Z_p_1; try apply cstring_len_ge_0;
+        apply IHHis_cstring; auto.
+      - assert (c = Int.repr (Int.signed c)) as Hc_repr.
+        symmetry; apply Int.repr_signed.
+        intros Hbound_j.
+        assert (j = Z.of_nat (Z.to_nat j)) as Hj_repr.
+        symmetry; apply nat_of_Z_eq; omega.
+        destruct (Int.signed c), (Z.to_nat j); try omega;
+        rewrite Hc_repr; intros; simpl; try apply char_zero_comp; auto;
+        rewrite <-nat_of_Z_of_nat with (n := n0); unfold nat_of_Z;
+        rewrite Z_S_nat in Hj_repr; apply IHHis_cstring; omega.
+  }
+  (* for suffixes we just have show the old values are OK *)
+  {
     - admit. (** FIXME **)
+  }
 Qed.
 
 Lemma cstring_len_bounds:
