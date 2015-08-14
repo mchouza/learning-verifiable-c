@@ -73,6 +73,25 @@ Proof.
   simpl; destruct (Int.signed a); auto; try contradiction.
 Qed.
 
+Lemma cstring_len_upper_bound:
+  forall str, exists i,
+  (nth i str (Int.repr 1)) = Int.repr 0 ->
+  cstring_len str <= Z.of_nat (S i).
+Proof.
+  induction str.
+  + exists O; intros _; simpl; omega.
+  + rewrite <-Int.repr_signed with (i := a).
+    destruct (eq_dec (Int.signed a) 0) as [Heq | Hne].
+    - exists O; rewrite Heq; intros _; simpl; omega.
+    - destruct IHstr as [i IHstr]; exists (S i).
+      rewrite cstring_len_nz_prefix; simpl nth.
+      intros Hhas_null.
+      cut (cstring_len str <= Z.of_nat (S i)).
+      admit. (** FIXME **)
+      apply IHstr; auto.
+      admit. (** FIXME **)
+Qed.      
+
 Lemma aux_str_len_succ_lemma:
   forall str,
   Z.to_nat (cstring_len str + 1) = S (Z.to_nat (cstring_len str)).
@@ -89,6 +108,7 @@ Lemma cstring_char_values:
   (0 <= j < (cstring_len str) ->
   (Znth j str (Int.repr 1)) <> Int.repr 0).
 Proof.
+  (* strong induction over the number of bytes *)
   cut (forall n str j,
        (length str < n)%nat ->
        is_cstring str ->
@@ -97,16 +117,23 @@ Proof.
        (Znth j str (Int.repr 1)) <> Int.repr 0)).
   intros Hgen str j; apply Hgen with (n := S (length str)); omega.
   unfold Znth; induction n.
+  (* trivial base case *)
   + intros str j Habs; exfalso; omega.
+  (* main case, uses induction over C string definition *)
   + intros str j Hxlen Hxcstr; induction Hxcstr.
+    (* empty C strings are easy *)
     - split; simpl; try intros; auto; omega.
+    (* for prefixes we need to check if the first char is null *)
     - rewrite <-Int.repr_signed with (i := c).
-      destruct (Int.signed c).
+      destruct (eq_dec (Int.signed c) 0).
       {
-        split; simpl; try intros; auto; omega.
+        (* a null prefix is easy to handle *)
+        rewrite e; split; simpl; auto; omega.
       }
       {
+        (* a non-null prefix just moves everything *)
         rewrite cstring_len_nz_prefix, aux_str_len_succ_lemma; simpl.
+        (* TODO: ADD MORE COMMENTS *)
         + split.
           - simpl in *; apply IHn; auto; omega.
           - intros Hbound_j.
@@ -114,15 +141,13 @@ Proof.
             symmetry; apply nat_of_Z_eq; omega.
             destruct (Z.to_nat j).
             * apply char_zero_comp; try discriminate; omega.
-            * rewrite <-nat_of_Z_of_nat with (n := n0).
+            * rewrite <-nat_of_Z_of_nat with (n := n1).
               unfold nat_of_Z; simpl in *.
               rewrite Zpos_P_of_succ_nat in H_j_repr.
               apply IHn; simpl in *; auto; omega.
         + apply char_zero_comp; try discriminate; omega.
       }
-      {
-        admit. (** FIXME: GENERALIZE REDUNDANT PARTS **)
-      }
+    (* for suffixes we just have show the old values are OK *)
     - admit. (** FIXME **)
 Qed.
 
