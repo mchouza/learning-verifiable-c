@@ -31,8 +31,143 @@ Fixpoint cstring_len (s:list int) :=
   | nil => 0
   end.
 
+Definition have_nulls str :=
+  exists i,
+  0 <= i < Zlength str /\
+  (Znth i str (Int.repr 1)) = Int.repr 0 /\
+  forall j, 0 <= j < i ->
+  (Znth j str (Int.repr 0)) <> Int.repr 0.
+
+Lemma nat_Z_xchg:
+  forall n a,
+  a >= 0 ->
+  (Z.of_nat n = a <-> n = Z.to_nat a).
+Proof.
+  intros n a a_ge_0; split.
+  + intros H; rewrite <-H, nat_of_Z_of_nat; auto.
+  + intros H; rewrite H, nat_of_Z_eq; auto.
+Qed.
+
+Lemma nat_S_to_Z:
+  forall n,
+  Z.of_nat (S n) = (Z.of_nat n) + 1.
+Proof.
+  intros n; simpl.
+  rewrite Zpos_P_of_succ_nat; auto.
+Qed.
+
+Lemma Z_plus_1_to_nat:
+  forall a,
+  a >= 0 -> Z.to_nat (a + 1) = S (Z.to_nat a).
+Proof.
+  intros a a_ge_0; simpl.
+  rewrite Z2Nat.inj_add; simpl; auto; try omega.
+Qed.
+
+Lemma Znth_plus_one:
+  forall A (str:list A) c i d,
+  i >= 0 ->
+  Znth (i + 1) (c :: str) d = Znth i str d.
+Proof.
+  intros A str c i d i_ge_0; unfold Znth.
+  rewrite Z_plus_1_to_nat; simpl; auto.
+Qed.
+
+Lemma Znth_zero:
+  forall A (str:list A) c d,
+  Znth 0 (c :: str) d = c.
+Proof.
+  intros A str c d.
+  unfold Znth; simpl; auto.
+Qed.
+
+Lemma Znth_app_1st:
+  forall A (s1 s2:list A) i d,
+  0 <= i < Zlength s1 ->
+  Znth i (s1 ++ s2) d = Znth i s1 d.
+Proof.
+  intros A s1 s2 i d i_bounds.
+  unfold Znth; rewrite app_nth1; auto.
+  cut (Z.to_nat i < Z.to_nat (Zlength s1))%nat.
+  rewrite Zlength_correct, nat_of_Z_of_nat; auto.
+  apply Z2Nat.inj_lt; auto; omega.
+Qed.
+
+Lemma Zlength_ge_0:
+  forall A (str:list A), Zlength str >= 0.
+Proof.
+  intros A str.
+  cut (0 <= Zlength str).
+  omega.
+  rewrite Zlength_correct.
+  apply Zle_0_nat.
+Qed.
+
+Lemma Zlength_cons:
+  forall A (str:list A) c,
+  Zlength (c :: str) = Zlength str + 1.
+Proof.
+  intros A str c.
+  repeat rewrite Zlength_correct; simpl length; rewrite nat_S_to_Z; auto.
+Qed.
+
+Lemma Zlength_app:
+  forall A (s1 s2:list A),
+  Zlength (s1 ++ s2) = Zlength s1 + Zlength s2.
+Proof.
+  intros A s1 s2.
+  repeat rewrite Zlength_correct; rewrite app_length.
+  apply Nat2Z.inj_add.
+Qed.
+
+Lemma Zlength_single_elem:
+  forall A (c:A), Zlength [c] = 1.
+Proof.
+  intros A c.
+  rewrite Zlength_correct; simpl; auto.
+Qed.
+
+Lemma cstring_have_nulls:
+  forall str, is_cstring str -> have_nulls str.
+Proof.
+  intros str str_is_cstring; unfold have_nulls.
+  induction str_is_cstring.
+  + exists 0; repeat split; simpl.
+    - omega.
+    - intros; omega.
+  + destruct (eq_dec c (Int.repr 0)).
+    - exists 0; rewrite e; repeat split; simpl.
+      * omega.
+      * cut (Zlength s >= 0).
+        rewrite Zlength_cons; omega.
+        apply Zlength_ge_0.
+      * intros; omega.
+    - destruct IHstr_is_cstring as
+        [i [i_bounds [str_has_null str_nn_prefix]]].
+      exists (i + 1); repeat split.
+      * omega.
+      * rewrite Zlength_cons; omega.
+      * rewrite Znth_plus_one; auto; omega.
+      * intros j j_bounds; destruct (zeq j 0).
+        {
+          rewrite e, Znth_zero; auto.
+        }
+        {
+          assert (j = j - 1 + 1) as j_pm_eq by omega.
+          rewrite j_pm_eq, Znth_plus_one by omega.
+          apply str_nn_prefix with (j := j - 1); omega.
+        }
+  + destruct IHstr_is_cstring as [i [i_bounds str_is_cstring']].
+    exists i; repeat split; try omega.
+    - rewrite Zlength_app, Zlength_single_elem; omega.
+    - rewrite Znth_app_1st; auto.
+      apply str_is_cstring'.
+    - intros j j_bounds; rewrite Znth_app_1st; auto; try omega.
+      apply str_is_cstring'; auto.
+Qed.       
+
 Lemma char_eq:
-  forall a b,
+  forall a b, 
   -128 <= a < 128 -> -128 <= b < 128 ->
   Int.repr a = Int.repr b ->
   a = b.
