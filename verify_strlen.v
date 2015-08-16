@@ -31,12 +31,13 @@ Fixpoint cstring_len (s:list int) :=
   | nil => 0
   end.
 
-Definition have_nulls str :=
+Definition has_nulls str :=
   exists i,
+  forall d,
   0 <= i < Zlength str /\
-  (Znth i str (Int.repr 1)) = Int.repr 0 /\
+  Znth i str d = Int.repr 0 /\
   forall j, 0 <= j < i ->
-  (Znth j str (Int.repr 0)) <> Int.repr 0.
+  Znth j str d <> Int.repr 0.
 
 Lemma nat_Z_xchg:
   forall n a,
@@ -93,6 +94,19 @@ Proof.
   apply Z2Nat.inj_lt; auto; omega.
 Qed.
 
+Lemma Znth_matches:
+  forall A (s:list A) i d1 d2,
+  0 <= i < Zlength s ->
+  Znth i s d1 = Znth i s d2.
+Proof.
+  intros A s i d1 d2 i_hi_bound.
+  unfold Znth.
+  apply nth_indep.
+  rewrite Zlength_correct in i_hi_bound.
+  rewrite <-nat_of_Z_of_nat.
+  apply Z2Nat.inj_lt; omega.
+Qed.
+
 Lemma Zlength_ge_0:
   forall A (str:list A), Zlength str >= 0.
 Proof.
@@ -127,10 +141,21 @@ Proof.
   rewrite Zlength_correct; simpl; auto.
 Qed.
 
-Lemma cstring_have_nulls:
-  forall str, is_cstring str -> have_nulls str.
+Lemma cstring_not_nil: ~is_cstring [].
 Proof.
-  intros str str_is_cstring; unfold have_nulls.
+  intros Habs.
+  inversion Habs.
+  assert (length (s ++ [c]) >= 1)%nat.
+  rewrite app_length; simpl; omega.
+  assert (length (s ++ [c]) = 0)%nat.
+  rewrite H; simpl; auto.
+  omega.
+Qed.
+
+Lemma cstring_has_nulls:
+  forall str, is_cstring str -> has_nulls str.
+Proof.
+  intros str str_is_cstring; unfold has_nulls.
   induction str_is_cstring.
   + exists 0; repeat split; simpl.
     - omega.
@@ -142,12 +167,12 @@ Proof.
         rewrite Zlength_cons; omega.
         apply Zlength_ge_0.
       * intros; omega.
-    - destruct IHstr_is_cstring as
-        [i [i_bounds [str_has_null str_nn_prefix]]].
-      exists (i + 1); repeat split.
+    - destruct IHstr_is_cstring as [i str_is_cstring'].
+      exists (i + 1); intros d; specialize (str_is_cstring' d);
+      repeat split.
       * omega.
       * rewrite Zlength_cons; omega.
-      * rewrite Znth_plus_one; auto; omega.
+      * rewrite Znth_plus_one; try omega; apply str_is_cstring'.
       * intros j j_bounds; destruct (zeq j 0).
         {
           rewrite e, Znth_zero; auto.
@@ -155,13 +180,13 @@ Proof.
         {
           assert (j = j - 1 + 1) as j_pm_eq by omega.
           rewrite j_pm_eq, Znth_plus_one by omega.
-          apply str_nn_prefix with (j := j - 1); omega.
+          apply str_is_cstring' with (j := j - 1); omega.
         }
-  + destruct IHstr_is_cstring as [i [i_bounds str_is_cstring']].
-    exists i; repeat split; try omega.
+  + destruct IHstr_is_cstring as [i str_is_cstring'].
+    exists i; intros d; specialize (str_is_cstring' d);
+    repeat split; try omega.
     - rewrite Zlength_app, Zlength_single_elem; omega.
-    - rewrite Znth_app_1st; auto.
-      apply str_is_cstring'.
+    - rewrite Znth_app_1st; auto; apply str_is_cstring'.
     - intros j j_bounds; rewrite Znth_app_1st; auto; try omega.
       apply str_is_cstring'; auto.
 Qed.       
@@ -236,61 +261,63 @@ Proof.
   cut (cstring_len str >= 0); try omega; apply cstring_len_ge_0.
 Qed.
 
-Lemma cstring_char_values:
-  forall str j,
-  is_cstring str ->
-  (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
-  (0 <= j < (cstring_len str) ->
-  (Znth j str (Int.repr 1)) <> Int.repr 0).
+Lemma cstring_len_aux_suffix_lemma:
+  forall s c,
+  cstring_len s <> cstring_len (s ++ [c]) ->
+  cstring_len s = Zlength s.
 Proof.
-  (* strong induction over the number of bytes *)
-  cut (forall n str j,
-       (length str < n)%nat ->
-       is_cstring str ->
-       (Znth (cstring_len str) str (Int.repr 1)) = Int.repr 0 /\
-       (0 <= j < (cstring_len str) ->
-       (Znth j str (Int.repr 1)) <> Int.repr 0)).
-  intros Hgen str j; apply Hgen with (n := S (length str)); omega.
-  unfold Znth; induction n.
-  (* trivial base case *)
-  + intros str j Habs; exfalso; omega.
-  (* main case, uses induction over C string definition *)
-  + intros str j Hxlen Hxcstr; induction Hxcstr.
-    (* empty C strings are easy *)
-    - split; simpl; try intros; auto; omega.
-    (* for prefixes we need to check if the first char is null *)
-    - rewrite <-Int.repr_signed with (i := c).
-      destruct (eq_dec (Int.signed c) 0).
-      {
-        (* a null prefix is easy to handle *)
-        rewrite e; split; simpl; auto; omega.
-      }
-      {
-        (* a non-null prefix just moves everything *)
-        rewrite cstring_len_nz_prefix, aux_str_len_succ_lemma; simpl.
-        (* TODO: ADD MORE COMMENTS *)
-        + split.
-          - simpl in *; apply IHn; auto; omega.
-          - intros Hbound_j.
-            assert (j = Z.of_nat (Z.to_nat j)) as H_j_repr.
-            symmetry; apply nat_of_Z_eq; omega.
-            destruct (Z.to_nat j).
-            * apply char_zero_comp; try discriminate; omega.
-            * rewrite <-nat_of_Z_of_nat with (n := n1).
-              unfold nat_of_Z; simpl in *.
-              rewrite Zpos_P_of_succ_nat in H_j_repr.
-              apply IHn; simpl in *; auto; omega.
-        + apply char_zero_comp; try discriminate; omega.
-      }
-    (* for suffixes we just have show the old values are OK *)
-    - admit. (** FIXME **)
+  intros s c.
+  induction s.
+  + intros _; rewrite Zlength_correct; simpl; auto.
+  + intros len_ineq.
+    destruct (eq_dec a (Int.repr 0)).
+    - exfalso; apply len_ineq; rewrite e, <-app_comm_cons.
+      simpl; auto.
+    - rewrite Zlength_cons, cstring_len_nz_prefix; auto.
+      cut (cstring_len s = Zlength s). omega.
+      apply IHs.
+      rewrite <-app_comm_cons in len_ineq.
+      repeat rewrite cstring_len_nz_prefix in len_ineq by auto.
+      omega.      
+Qed.
+
+Lemma cstring_len_abs_bound:
+  forall str, 0 <= cstring_len str <= Zlength str.
+Proof.
+  induction str.
+  + unfold Zlength; simpl; omega.
+  + destruct (eq_dec a (Int.repr 0)).
+    - rewrite e, Zlength_cons; simpl; omega.
+    - rewrite cstring_len_nz_prefix, Zlength_cons by auto.
+      omega.
 Qed.
 
 Lemma cstring_len_bounds:
   forall str,
   is_cstring str -> 0 <= cstring_len str < Zlength str.
 Proof.
-Admitted. (** FIXME **)
+  intros str str_is_cstring.
+  induction str_is_cstring.
+  {
+    simpl cstring_len; rewrite Zlength_single_elem; omega.
+  }
+  {
+    destruct (eq_dec c (Int.repr 0)).
+    + rewrite e, Zlength_cons; simpl cstring_len.
+      assert (0 < Zlength s) as Zlength_bound by omega.
+      omega.
+    + rewrite cstring_len_nz_prefix, Zlength_cons; auto; omega.
+  }
+  {
+    rewrite Zlength_app, Zlength_single_elem.
+    destruct (eq_dec (cstring_len s) (cstring_len (s ++ [c]))).
+    + rewrite <-e; omega.
+    + cut (cstring_len s = Zlength s).
+      - omega.
+      - apply cstring_len_aux_suffix_lemma with (c := c).
+        auto.
+  }
+Qed.
 
 Lemma typecast_aux_lemma:
   forall i str,
@@ -301,12 +328,76 @@ Proof.
   unfold make_arr_fun, Znth; rewrite map_nth; simpl; auto.
 Qed.
 
+Lemma char_value_lemma:
+  forall str c,
+  is_cstring str ->  
+  Vint (Int.sign_ext 8 (nth 0 str (Int.repr 1))) = Vint c ->
+  Int.sign_ext 8 (Int.repr (Int.signed (nth 0 str (Int.repr 0)))) = c.
+Proof.
+Admitted. (** FIXME **)
+
+Lemma cstring_in_lemma:
+  forall str i d,
+  0 <= i <= cstring_len str ->
+  is_cstring str ->
+  negb (Int.eq
+         (Int.sign_ext 8
+           (Int.repr (Int.signed (Znth i str d))))
+         (Int.repr 0)) = true ->
+  i < cstring_len str.
+Proof.
+Admitted. (** FIXME **)
+
+Lemma cstring_end_lemma:
+  forall str i d,
+  0 <= i <= cstring_len str ->
+  is_cstring str ->
+  negb (Int.eq
+         (Int.sign_ext 8
+           (Int.repr (Int.signed (Znth i str d))))
+         (Int.repr 0)) = false ->
+  cstring_len str = i.
+Proof.
+Admitted. (** FIXME **)
+
+Lemma cstring_len_nulls_pos:
+  forall str d,
+  is_cstring str ->
+  Znth (cstring_len str) str d = Int.repr 0 /\
+  forall i, 0 <= i < cstring_len str ->
+  Znth i str d <> Int.repr 0.
+Proof.
+  intros str d str_is_cstring.
+  induction str_is_cstring.
+  {
+    simpl cstring_len; rewrite Znth_zero; split; auto.
+    intros i'; omega.
+  }
+  {
+    destruct (eq_dec c (Int.repr 0)).
+    + rewrite e; simpl cstring_len; split; auto.
+      intros i'; omega.
+    + rewrite cstring_len_nz_prefix by auto; split.
+      - rewrite Znth_plus_one by apply cstring_len_ge_0.
+        apply IHstr_is_cstring; auto.
+      - intros i; destruct (eq_dec i 0).
+        * rewrite e, Znth_zero; auto.
+        * intros i_bound.
+          assert (i = i - 1 + 1) as i_eq by omega.
+          rewrite i_eq, Znth_plus_one by omega.
+          apply IHstr_is_cstring with (i := i - 1); omega.
+  }
+  {
+    admit. (** FIXME **)
+  }
+Qed.
+
 Definition my_strlen_spec :=
   DECLARE _my_strlen
     WITH str: list int, sh: share, s: val
     PRE [ _s OF tptr tschar ]
       PROP (is_cstring str;
-            (cstring_len str) < Int.max_signed)
+           (Zlength str) <= Int.max_signed)
       LOCAL (`(eq s) (eval_id _s);
              `isptr (eval_id _s))
       SEP(`(array_at tschar sh (make_arr_fun (map Vint str))
@@ -357,32 +448,55 @@ Proof.
     apply exp_right with (Int.signed (nth 0 str (Int.repr 0))).
     entailer!.
     + intros x Hge Hlt; exfalso; omega.
-    + admit. (** FIXME **)
+    + rewrite typecast_aux_lemma in H1; simpl in *.
+      apply char_value_lemma; auto.
   }
   {
     entailer!.
   }
   {
     entailer!.
-    + admit. (** FIXME **)
+    + apply f_equal.
+      apply cstring_end_lemma with (d := Int.repr 0); auto.
   }
   {
     forward.
     forward.
     {
       entailer!.
-      + admit. (** FIXME **)
+      + cut (i < cstring_len str < Zlength str).
+        omega.
+        split.
+        - apply cstring_in_lemma with (d := Int.repr 0); auto.
+        - apply cstring_len_bounds; auto.
       + rewrite typecast_aux_lemma; simpl; auto.
     }
     {
       apply exp_right with (i + 1).
       apply exp_right with (Int.signed (Znth (i + 1) str (Int.repr 0))).
       entailer!.
-      + admit. (** FIXME **)
-      + admit. (** FIXME **)
+      + intros j j_lo_bound j_hi_bound.
+        assert (i < cstring_len str) as i_hi_bound.
+        apply cstring_in_lemma with (d := Int.repr 0); auto.
+        apply cstring_len_nulls_pos; auto; omega.
+      + assert (i < cstring_len str) as i_hi_bound.
+        apply cstring_in_lemma with (d := Int.repr 0); auto.
+        omega.
       + rewrite typecast_aux_lemma in H4; simpl in H4.
         inversion H4; simpl.
-        admit. (** FIXME **)
+        assert (nth (Z.to_nat (i + 1)) str (Int.repr 1) =
+                Znth (i + 1) str (Int.repr 1)) as Znth_eq by
+          (unfold Znth; auto).
+        assert (Int.min_signed < 0) by apply Int.min_signed_neg.
+        assert (0 <= cstring_len str < Zlength str) by
+          (apply cstring_len_bounds; auto).
+        assert (i < cstring_len str) as i_hi_bound by
+          (apply cstring_in_lemma with (d := Int.repr 0); auto).
+        rewrite Int.add_signed.
+        repeat rewrite Int.signed_repr; try omega.
+        repeat rewrite Int.repr_signed; try omega.
+        rewrite Znth_eq, Znth_matches 
+          with (d1 := Int.repr 0) (d2 := Int.repr 1); auto; omega.
     }
   }
   forward.
