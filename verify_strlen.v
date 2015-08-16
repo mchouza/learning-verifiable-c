@@ -233,25 +233,6 @@ Proof.
   simpl; destruct (Int.signed a); auto; try contradiction.
 Qed.
 
-Lemma cstring_len_upper_bound:
-  forall str, exists i,
-  (nth i str (Int.repr 1)) = Int.repr 0 ->
-  cstring_len str <= Z.of_nat (S i).
-Proof.
-  induction str.
-  + exists O; intros _; simpl; omega.
-  + rewrite <-Int.repr_signed with (i := a).
-    destruct (eq_dec (Int.signed a) 0) as [Heq | Hne].
-    - exists O; rewrite Heq; intros _; simpl; omega.
-    - destruct IHstr as [i IHstr]; exists (S i).
-      rewrite cstring_len_nz_prefix; simpl nth.
-      intros Hhas_null.
-      cut (cstring_len str <= Z.of_nat (S i)).
-      admit. (** FIXME **)
-      apply IHstr; auto.
-      admit. (** FIXME **)
-Qed.      
-
 Lemma aux_str_len_succ_lemma:
   forall str,
   Z.to_nat (cstring_len str + 1) = S (Z.to_nat (cstring_len str)).
@@ -360,37 +341,34 @@ Lemma cstring_end_lemma:
 Proof.
 Admitted. (** FIXME **)
 
-Lemma cstring_len_nulls_pos:
-  forall str d,
+Lemma cstring_content_non_null:
+  forall str,
   is_cstring str ->
-  Znth (cstring_len str) str d = Int.repr 0 /\
-  forall i, 0 <= i < cstring_len str ->
-  Znth i str d <> Int.repr 0.
+  forall j d,
+  0 <= j < cstring_len str ->
+  Znth j str d <> Int.repr 0.
 Proof.
-  intros str d str_is_cstring.
+  intros str str_is_cstring.
   induction str_is_cstring.
-  {
-    simpl cstring_len; rewrite Znth_zero; split; auto.
-    intros i'; omega.
-  }
-  {
+  + intros; unfold Zlength in *; simpl in *; omega.
+  + intros j d j_bounds.
     destruct (eq_dec c (Int.repr 0)).
-    + rewrite e; simpl cstring_len; split; auto.
-      intros i'; omega.
-    + rewrite cstring_len_nz_prefix by auto; split.
-      - rewrite Znth_plus_one by apply cstring_len_ge_0.
-        apply IHstr_is_cstring; auto.
-      - intros i; destruct (eq_dec i 0).
-        * rewrite e, Znth_zero; auto.
-        * intros i_bound.
-          assert (i = i - 1 + 1) as i_eq by omega.
-          rewrite i_eq, Znth_plus_one by omega.
-          apply IHstr_is_cstring with (i := i - 1); omega.
-  }
-  {
-    admit. (** FIXME **)
-  }
-Qed.
+    - rewrite e in *; simpl in *; omega.
+    - destruct (eq_dec j 0).
+      * rewrite e, Znth_zero; auto.
+      * rewrite cstring_len_nz_prefix in j_bounds by auto.
+        assert (j = j - 1 + 1) as j_eq by omega.
+        rewrite j_eq, Znth_plus_one by omega.
+        apply IHstr_is_cstring; omega.
+  + assert (cstring_len s < Zlength s) by (apply cstring_len_bounds; auto).
+    destruct (eq_dec (cstring_len s) (cstring_len (s ++ [c]))).
+    - rewrite <-e; intros j d j_bounds.
+      rewrite Znth_app_1st by omega.
+      apply IHstr_is_cstring; omega.
+    - assert (cstring_len s = Zlength s) by
+        (apply cstring_len_aux_suffix_lemma with (c := c); auto).
+      intros; omega.
+Qed.    
 
 Definition my_strlen_spec :=
   DECLARE _my_strlen
@@ -478,7 +456,7 @@ Proof.
       + intros j j_lo_bound j_hi_bound.
         assert (i < cstring_len str) as i_hi_bound.
         apply cstring_in_lemma with (d := Int.repr 0); auto.
-        apply cstring_len_nulls_pos; auto; omega.
+        apply cstring_content_non_null; auto; omega.
       + assert (i < cstring_len str) as i_hi_bound.
         apply cstring_in_lemma with (d := Int.repr 0); auto.
         omega.
