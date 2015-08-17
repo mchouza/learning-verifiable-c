@@ -318,8 +318,7 @@ Lemma signed_bounds:
   forall a, -128 <= a < 128 ->
   Int.min_signed <= a <= Int.max_signed.
 Proof.
-  unfold Int.min_signed, Int.max_signed, Int.half_modulus, Int.modulus,
-         Int.wordsize, Wordsize_32.wordsize.
+  unfold Int.min_signed, Int.max_signed.
   intros a; simpl; omega.
 Qed.
 
@@ -357,7 +356,22 @@ Lemma char_sign_ext_zero_comp:
   -128 <= a < 128 ->
   Int.eq (Int.sign_ext 8 (Int.repr a)) (Int.repr 0) = Z.eqb a 0.
 Proof.
-Admitted. (** FIXME **)
+  intros a a_bounds.
+  assert (Int.sign_ext 8 (Int.repr a) = Int.repr 0 <-> a = 0).
+  {
+    split.
+    + admit. (** FIXME **)
+    + intros a_eq_0; rewrite a_eq_0; compute; auto.
+  }
+  destruct (eq_dec a 0).
+  + rewrite e; compute; auto.
+  + cut ((a =? 0) = false).
+    - intros eq_false; rewrite eq_false.
+      apply Int.eq_false.
+      intros Habs.
+      apply n, H, Habs.
+   - apply Z.eqb_neq; auto.
+Qed.     
 
 Lemma cstring_len_ge_0:
   forall str, cstring_len str >= 0.
