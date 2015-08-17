@@ -65,48 +65,6 @@ Proof.
   rewrite Z2Nat.inj_add; simpl; auto; try omega.
 Qed.
 
-Lemma Znth_plus_one:
-  forall A (str:list A) c i d,
-  i >= 0 ->
-  Znth (i + 1) (c :: str) d = Znth i str d.
-Proof.
-  intros A str c i d i_ge_0; unfold Znth.
-  rewrite Z_plus_1_to_nat; simpl; auto.
-Qed.
-
-Lemma Znth_zero:
-  forall A (str:list A) c d,
-  Znth 0 (c :: str) d = c.
-Proof.
-  intros A str c d.
-  unfold Znth; simpl; auto.
-Qed.
-
-Lemma Znth_app_1st:
-  forall A (s1 s2:list A) i d,
-  0 <= i < Zlength s1 ->
-  Znth i (s1 ++ s2) d = Znth i s1 d.
-Proof.
-  intros A s1 s2 i d i_bounds.
-  unfold Znth; rewrite app_nth1; auto.
-  cut (Z.to_nat i < Z.to_nat (Zlength s1))%nat.
-  rewrite Zlength_correct, nat_of_Z_of_nat; auto.
-  apply Z2Nat.inj_lt; auto; omega.
-Qed.
-
-Lemma Znth_matches:
-  forall A (s:list A) i d1 d2,
-  0 <= i < Zlength s ->
-  Znth i s d1 = Znth i s d2.
-Proof.
-  intros A s i d1 d2 i_hi_bound.
-  unfold Znth.
-  apply nth_indep.
-  rewrite Zlength_correct in i_hi_bound.
-  rewrite <-nat_of_Z_of_nat.
-  apply Z2Nat.inj_lt; omega.
-Qed.
-
 Lemma Zlength_ge_0:
   forall A (str:list A), Zlength str >= 0.
 Proof.
@@ -141,6 +99,112 @@ Proof.
   rewrite Zlength_correct; simpl; auto.
 Qed.
 
+Lemma Znth_plus_one:
+  forall A (str:list A) c i d,
+  i >= 0 ->
+  Znth (i + 1) (c :: str) d = Znth i str d.
+Proof.
+  intros A str c i d i_ge_0; unfold Znth.
+  rewrite Z_plus_1_to_nat; simpl; auto.
+Qed.
+
+Lemma Znth_zero:
+  forall A (str:list A) c d,
+  Znth 0 (c :: str) d = c.
+Proof.
+  intros A str c d.
+  unfold Znth; simpl; auto.
+Qed.
+
+Lemma Znth_le_zero:
+  forall A (str:list A) i d,
+  i <= 0 ->
+  Znth i str d = Znth 0 str d.
+Proof.
+  intros A str i d i_hi_bound; unfold Znth.
+  SearchAbout Z.to_nat.
+  assert (Z.to_nat i = O) as nat_i_eq_0.
+  {
+    destruct i.
+    + simpl; auto.
+    + cut (0 < Z.pos p).
+      - intros; omega.
+      - unfold Z.lt; simpl; auto.
+    + simpl; auto.
+  }
+  rewrite nat_i_eq_0; auto.
+Qed.
+
+Lemma Znth_default:
+  forall A (str:list A) i d,
+  Zlength str <= i ->
+  Znth i str d = d.
+Proof.
+  intros A str i d i_lo_bound; unfold Znth.
+  assert (0 <= Zlength str) as zl_ge_0.
+  {
+    rewrite Zlength_correct.
+    apply Nat2Z.is_nonneg.
+  }
+  apply nth_overflow.
+  rewrite <-nat_of_Z_of_nat with (n := length str), <-Zlength_correct.
+  apply Z2Nat.inj_le; auto; omega.
+Qed.
+
+Lemma Znth_app_1st:
+  forall A (s1 s2:list A) i d,
+  0 <= i < Zlength s1 ->
+  Znth i (s1 ++ s2) d = Znth i s1 d.
+Proof.
+  intros A s1 s2 i d i_bounds.
+  unfold Znth; rewrite app_nth1; auto.
+  cut (Z.to_nat i < Z.to_nat (Zlength s1))%nat.
+  rewrite Zlength_correct, nat_of_Z_of_nat; auto.
+  apply Z2Nat.inj_lt; auto; omega.
+Qed.
+
+Lemma Znth_app_2nd:
+  forall A (s1 s2:list A) i d,
+  i >= Zlength s1 ->
+  Znth i (s1 ++ s2) d = Znth (i - Zlength s1) s2 d.
+Proof.
+  intros A s1 s2 i d i_lo_bound.
+  unfold Znth; rewrite app_nth2.
+  + rewrite Zlength_correct, Z2Nat.inj_sub, nat_of_Z_of_nat; auto.
+    apply Zle_0_nat.
+  + cut (length s1 <= Z.to_nat i)%nat.
+    - omega.
+    - assert (Zlength s1 >= 0) as zl_ge_0 by apply Zlength_ge_0.
+      rewrite Zlength_correct in i_lo_bound.
+      rewrite <-nat_of_Z_of_nat with (n := length s1).
+      apply Z2Nat.inj_le; omega.
+Qed.
+
+Lemma Znth_matches:
+  forall A (s:list A) i d1 d2,
+  0 <= i < Zlength s ->
+  Znth i s d1 = Znth i s d2.
+Proof.
+  intros A s i d1 d2 i_hi_bound.
+  unfold Znth.
+  apply nth_indep.
+  rewrite Zlength_correct in i_hi_bound.
+  rewrite <-nat_of_Z_of_nat.
+  apply Z2Nat.inj_lt; omega.
+Qed.
+
+Lemma Znth_general_props:
+  forall A (P:A -> Prop) (s:list A) i d,
+  (forall c, In c s -> P c) ->
+  P d ->
+  P (Znth i s d).
+Proof.
+  intros A P s i d P_in P_out; unfold Znth.
+  destruct (nth_in_or_default (Z.to_nat i) s d).
+  + apply P_in with (c := (nth (Z.to_nat i) s d)); auto.
+  + rewrite e; auto.
+Qed.
+
 Lemma cstring_not_nil: ~is_cstring [].
 Proof.
   intros Habs.
@@ -151,6 +215,65 @@ Proof.
   rewrite H; simpl; auto.
   omega.
 Qed.
+
+Lemma cstring_Zlength_gt_zero:
+  forall str, is_cstring str -> Zlength str > 0.
+Proof.
+  intros str str_is_cstring.
+  destruct str.
+  + exfalso; apply cstring_not_nil; auto.
+  + rewrite Zlength_cons.
+    cut (Zlength str >= 0).
+    - omega.
+    - apply Zlength_ge_0.
+Qed.
+
+Lemma cstring_has_bounded_chars:
+  forall str d i,
+  is_cstring str ->
+  -128 <= Int.signed d < 128 ->
+  -128 <= Int.signed (Znth i str d) < 128.
+Proof.
+  intros str d i str_is_cstring d_bounds.
+  generalize i; clear i.
+  induction str_is_cstring.
+  {
+    intros; destruct (zle i 0).
+    + rewrite Znth_le_zero, Znth_zero by omega; simpl.
+      rewrite Int.signed_repr.
+      - omega.
+      - assert (Int.min_signed < 0) as lo_bound by apply Int.min_signed_neg.
+        assert (Int.max_signed >= 0) as hi_bound by apply Int.max_signed_pos.
+        omega.
+    + rewrite Znth_default; auto.
+      unfold Zlength; simpl; omega.
+  }
+  {
+    intros; destruct (zle i 0).
+    + rewrite Znth_le_zero, Znth_zero by omega; auto.
+    + assert (i = i - 1 + 1) as i_eq by omega.
+      rewrite i_eq, Znth_plus_one by omega.
+      apply IHstr_is_cstring.
+  }
+  {
+    intros; destruct (zlt i (Zlength s)).
+    + destruct (zlt i 0).
+      - rewrite Znth_le_zero, Znth_app_1st; try omega.
+        apply IHstr_is_cstring.
+        cut (Zlength s > 0).
+        * omega.
+        * apply cstring_Zlength_gt_zero; auto.
+      - rewrite Znth_app_1st by omega.
+        apply IHstr_is_cstring.
+    + rewrite Znth_app_2nd by auto.
+      destruct (eq_dec i (Zlength s)).
+      - assert (i - i = 0) as i_cancel by omega.
+        rewrite <-e, i_cancel, Znth_zero; auto.
+      - rewrite Znth_default.
+        * omega.
+        * rewrite Zlength_single_elem; omega.
+  }
+Qed.  
 
 Lemma cstring_has_nulls:
   forall str, is_cstring str -> has_nulls str.
@@ -312,10 +435,23 @@ Qed.
 Lemma char_value_lemma:
   forall str c,
   is_cstring str ->  
-  Vint (Int.sign_ext 8 (nth 0 str (Int.repr 1))) = Vint c ->
-  Int.sign_ext 8 (Int.repr (Int.signed (nth 0 str (Int.repr 0)))) = c.
+  Vint (Int.sign_ext 8 (Znth 0 str (Int.repr 1))) = Vint c ->
+  Int.sign_ext 8 (Int.repr (Int.signed (Znth 0 str (Int.repr 0)))) = c.
 Proof.
-Admitted. (** FIXME **)
+  intros str c str_is_cstring vint_eq.
+  cut (c = Int.sign_ext 8 (Znth 0 str (Int.repr 0))).
+  {
+    intros c_eq.
+    rewrite Int.repr_signed, <-c_eq; auto.
+  }
+  {
+    rewrite Znth_matches with (d2 := (Int.repr 1)).
+    + inversion vint_eq; auto.
+    + cut (Zlength str > 0).
+      - omega.
+      - apply cstring_Zlength_gt_zero; auto.
+  }
+Qed.
 
 Lemma cstring_in_lemma:
   forall str i d,
@@ -423,7 +559,7 @@ Proof.
                      0 (Zlength str) s))).
   {
     apply exp_right with 0.
-    apply exp_right with (Int.signed (nth 0 str (Int.repr 0))).
+    apply exp_right with (Int.signed (Znth 0 str (Int.repr 0))).
     entailer!.
     + intros x Hge Hlt; exfalso; omega.
     + rewrite typecast_aux_lemma in H1; simpl in *.
