@@ -314,23 +314,35 @@ Proof.
       apply str_is_cstring'; auto.
 Qed.       
 
+Lemma signed_bounds:
+  forall a, -128 <= a < 128 ->
+  Int.min_signed <= a <= Int.max_signed.
+Proof.
+  unfold Int.min_signed, Int.max_signed, Int.half_modulus, Int.modulus,
+         Int.wordsize, Wordsize_32.wordsize.
+  intros a; simpl; omega.
+Qed.
+
+Lemma char_bound:
+  forall c,
+  -128 <= c < 128 ->
+  -128 <= Int.signed (Int.repr c) < 128.
+Proof.
+  intros c c_bounds.
+  rewrite Int.signed_repr; auto.
+  apply signed_bounds; auto.
+Qed.
+
 Lemma char_eq:
   forall a b, 
   -128 <= a < 128 -> -128 <= b < 128 ->
   Int.repr a = Int.repr b ->
   a = b.
 Proof.
-  assert (forall a, -128 <= a < 128 ->
-          Int.min_signed <= a <= Int.max_signed) as Hbound_gen.
-  { 
-    intros a' H.
-    unfold Int.min_signed, Int.max_signed, Int.half_modulus, Int.modulus,
-           Int.wordsize, Wordsize_32.wordsize in *.
-    simpl; omega.
-  }
-  intros a b Hbound_a Hbound_b Heq_repr.
-  rewrite <-Int.signed_repr with (z := a), <-Int.signed_repr with (z := b);
-  try rewrite Heq_repr; auto.
+  intros a b a_bounds b_bounds repr_eq.
+  rewrite <-Int.signed_repr with (z := a), <-Int.signed_repr with (z := b) by
+    (apply signed_bounds; auto).
+  apply f_equal; auto.
 Qed.  
 
 Lemma char_zero_comp:
@@ -339,6 +351,13 @@ Proof.
   intros a Hbound_a Habs Habs_repr.
   apply Habs, char_eq; auto; omega.
 Qed.
+
+Lemma char_sign_ext_zero_comp:
+  forall a,
+  -128 <= a < 128 ->
+  Int.eq (Int.sign_ext 8 (Int.repr a)) (Int.repr 0) = Z.eqb a 0.
+Proof.
+Admitted. (** FIXME **)
 
 Lemma cstring_len_ge_0:
   forall str, cstring_len str >= 0.
@@ -423,6 +442,73 @@ Proof.
   }
 Qed.
 
+Lemma cstring_len_suffix:
+  forall str c,
+  is_cstring str ->
+  cstring_len str = cstring_len (str ++ [c]).
+Proof.
+  intros str c str_is_cstring.
+  destruct (eq_dec (cstring_len str) (cstring_len (str ++ [c]))).
+  + rewrite e; auto.
+  + assert (cstring_len str = Zlength str) as Habs1 by
+      (apply cstring_len_aux_suffix_lemma with (c := c); auto).
+    assert (0 <= cstring_len str < Zlength str) as Habs2 by
+      (apply cstring_len_bounds; auto).
+    omega.
+Qed.
+
+Lemma cstring_content_non_null:
+  forall str,
+  is_cstring str ->
+  forall j d,
+  0 <= j < cstring_len str ->
+  Znth j str d <> Int.repr 0.
+Proof.
+  intros str str_is_cstring.
+  induction str_is_cstring.
+  + intros; unfold Zlength in *; simpl in *; omega.
+  + intros j d j_bounds.
+    destruct (eq_dec c (Int.repr 0)).
+    - rewrite e in *; simpl in *; omega.
+    - destruct (eq_dec j 0).
+      * rewrite e, Znth_zero; auto.
+      * rewrite cstring_len_nz_prefix in j_bounds by auto.
+        assert (j = j - 1 + 1) as j_eq by omega.
+        rewrite j_eq, Znth_plus_one by omega.
+        apply IHstr_is_cstring; omega.
+  + assert (cstring_len s < Zlength s) by (apply cstring_len_bounds; auto).
+    destruct (eq_dec (cstring_len s) (cstring_len (s ++ [c]))).
+    - rewrite <-e; intros j d j_bounds.
+      rewrite Znth_app_1st by omega.
+      apply IHstr_is_cstring; omega.
+    - assert (cstring_len s = Zlength s) by
+        (apply cstring_len_aux_suffix_lemma with (c := c); auto).
+      intros; omega.
+Qed.
+
+Lemma cstring_ending_is_null:
+  forall str d,
+  is_cstring str ->
+  Znth (cstring_len str) str d = Int.repr 0.
+Proof.
+  intros str d str_is_cstring.
+  induction str_is_cstring.
+  {
+    apply Znth_zero.
+  }
+  {
+    destruct (eq_dec c (Int.repr 0)).
+    + rewrite e; apply Znth_zero.
+    + rewrite cstring_len_nz_prefix by auto.
+      rewrite Znth_plus_one by apply cstring_len_ge_0.
+      auto.
+  }
+  {
+    rewrite <-cstring_len_suffix, Znth_app_1st; auto.
+    apply cstring_len_bounds; auto.
+  }
+Qed.
+
 Lemma typecast_aux_lemma:
   forall i str,
   make_arr_fun (map Vint str) i =
@@ -455,6 +541,7 @@ Qed.
 
 Lemma cstring_in_lemma:
   forall str i d,
+  -128 <= Int.signed d < 128 ->
   0 <= i <= cstring_len str ->
   is_cstring str ->
   negb (Int.eq
@@ -463,10 +550,25 @@ Lemma cstring_in_lemma:
          (Int.repr 0)) = true ->
   i < cstring_len str.
 Proof.
-Admitted. (** FIXME **)
+  intros str i d d_bounds i_bounds str_is_cstring.
+  remember (Znth i str d) as c.
+  assert (-128 <= Int.signed c < 128) as c_bounds.
+  {
+    rewrite Heqc.
+    apply cstring_has_bounded_chars; auto.
+  }
+  rewrite char_sign_ext_zero_comp; auto.
+  + destruct (eq_dec c (Int.repr 0)).
+    - rewrite e; simpl; discriminate.
+    - destruct (eq_dec i (cstring_len str)).
+      * rewrite e, cstring_ending_is_null in Heqc by auto.
+        rewrite Heqc; simpl; discriminate.
+      * intros _; omega.
+Qed.
 
 Lemma cstring_end_lemma:
   forall str i d,
+  -128 <= Int.signed d < 128 ->
   0 <= i <= cstring_len str ->
   is_cstring str ->
   negb (Int.eq
@@ -475,37 +577,28 @@ Lemma cstring_end_lemma:
          (Int.repr 0)) = false ->
   cstring_len str = i.
 Proof.
-Admitted. (** FIXME **)
-
-Lemma cstring_content_non_null:
-  forall str,
-  is_cstring str ->
-  forall j d,
-  0 <= j < cstring_len str ->
-  Znth j str d <> Int.repr 0.
-Proof.
-  intros str str_is_cstring.
-  induction str_is_cstring.
-  + intros; unfold Zlength in *; simpl in *; omega.
-  + intros j d j_bounds.
-    destruct (eq_dec c (Int.repr 0)).
-    - rewrite e in *; simpl in *; omega.
-    - destruct (eq_dec j 0).
-      * rewrite e, Znth_zero; auto.
-      * rewrite cstring_len_nz_prefix in j_bounds by auto.
-        assert (j = j - 1 + 1) as j_eq by omega.
-        rewrite j_eq, Znth_plus_one by omega.
-        apply IHstr_is_cstring; omega.
-  + assert (cstring_len s < Zlength s) by (apply cstring_len_bounds; auto).
-    destruct (eq_dec (cstring_len s) (cstring_len (s ++ [c]))).
-    - rewrite <-e; intros j d j_bounds.
-      rewrite Znth_app_1st by omega.
-      apply IHstr_is_cstring; omega.
-    - assert (cstring_len s = Zlength s) by
-        (apply cstring_len_aux_suffix_lemma with (c := c); auto).
-      intros; omega.
-Qed.    
-
+  intros str i d d_bounds i_bounds str_is_cstring.
+  remember (Znth i str d) as c.
+  assert (-128 <= Int.signed c < 128) as c_bounds.
+  {
+    rewrite Heqc.
+    apply cstring_has_bounded_chars; auto.
+  }
+  rewrite char_sign_ext_zero_comp; auto.
+  + destruct (eq_dec i (cstring_len str)).
+    - rewrite Heqc, e, cstring_ending_is_null by auto; simpl; auto.
+    - destruct (eq_dec c (Int.repr 0)).
+      * absurd (c = Int.repr 0); auto.
+        rewrite Heqc.
+        apply cstring_content_non_null; auto; omega.
+      * rewrite <-Int.repr_signed with (i := c) in n0.
+        cut ((Int.signed c =? 0) = false).
+        intros c_ne_0_bool; rewrite c_ne_0_bool; simpl; discriminate.
+        apply Z.eqb_neq.
+        intros Habs.
+        apply n0, f_equal; auto.
+Qed.
+        
 Definition my_strlen_spec :=
   DECLARE _my_strlen
     WITH str: list int, sh: share, s: val
@@ -572,6 +665,7 @@ Proof.
     entailer!.
     + apply f_equal.
       apply cstring_end_lemma with (d := Int.repr 0); auto.
+      apply char_bound; omega.
   }
   {
     forward.
@@ -581,7 +675,7 @@ Proof.
       + cut (i < cstring_len str < Zlength str).
         omega.
         split.
-        - apply cstring_in_lemma with (d := Int.repr 0); auto.
+        - apply cstring_in_lemma with (d := Int.repr 0); auto; apply char_bound; omega.
         - apply cstring_len_bounds; auto.
       + rewrite typecast_aux_lemma; simpl; auto.
     }
@@ -591,10 +685,10 @@ Proof.
       entailer!.
       + intros j j_lo_bound j_hi_bound.
         assert (i < cstring_len str) as i_hi_bound.
-        apply cstring_in_lemma with (d := Int.repr 0); auto.
+        apply cstring_in_lemma with (d := Int.repr 0); auto; apply char_bound; omega.
         apply cstring_content_non_null; auto; omega.
       + assert (i < cstring_len str) as i_hi_bound.
-        apply cstring_in_lemma with (d := Int.repr 0); auto.
+        apply cstring_in_lemma with (d := Int.repr 0); auto; apply char_bound; omega.
         omega.
       + rewrite typecast_aux_lemma in H4; simpl in H4.
         inversion H4; simpl.
@@ -605,7 +699,7 @@ Proof.
         assert (0 <= cstring_len str < Zlength str) by
           (apply cstring_len_bounds; auto).
         assert (i < cstring_len str) as i_hi_bound by
-          (apply cstring_in_lemma with (d := Int.repr 0); auto).
+          (apply cstring_in_lemma with (d := Int.repr 0); auto; apply char_bound; omega).
         rewrite Int.add_signed.
         repeat rewrite Int.signed_repr; try omega.
         repeat rewrite Int.repr_signed; try omega.
