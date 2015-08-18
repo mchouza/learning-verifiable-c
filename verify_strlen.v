@@ -378,12 +378,37 @@ Proof.
   + apply f_equal; auto.
 Qed.
 
+Lemma eqmod_unsigned_repr:
+  forall a, Int.eqmod (two_p 8) (Int.unsigned (Int.repr a)) a.
+Proof.
+  intros a.
+  apply Int.eqmod_divides with (n := Int.modulus).
+  + fold Int.eqm.
+    apply Int.eqm_unsigned_repr_l, Int.eqm_refl.
+  + exists (two_p 24); compute; auto.
+Qed.
+
 Lemma char_sign_ext_no_change:
   forall a,
   -128 <= a < 128 ->
   Int.sign_ext 8 (Int.repr a) = Int.repr a.
 Proof.
-Admitted. (** FIXME **)
+  intros a a_bounds.
+  rewrite <-Int.repr_signed with (i := Int.sign_ext 8 (Int.repr a)).
+  apply f_equal.
+  apply eqmod_small_eq_shifted with (m := two_p 8) (k := -two_p (8 - 1)).
+  + apply Int.sign_ext_range; unfold Int.zwordsize; simpl; omega.
+  + auto.
+  + assert (Int.eqmod (two_p 8) (Int.signed (Int.sign_ext 8 (Int.repr a))) (Int.unsigned (Int.repr a))) as Heq_1.
+    {
+      apply Int.eqmod_sign_ext; unfold Int.zwordsize; simpl; omega.
+    }
+    assert (Int.eqmod (two_p 8) (Int.unsigned (Int.repr a)) a) as Heq_2.
+    {
+      apply eqmod_unsigned_repr.
+    }
+    apply Int.eqmod_trans with (y := (Int.unsigned (Int.repr a))); auto.
+Qed.
 
 Lemma char_sign_ext_zero_comp:
   forall a,
