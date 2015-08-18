@@ -351,26 +351,53 @@ Proof.
   apply Habs, char_eq; auto; omega.
 Qed.
 
+Lemma eqmod_small_eq_shifted:
+  forall a b m k,
+  k <= a < m + k ->
+  k <= b < m + k ->
+  Int.eqmod m a b ->
+  a = b.
+Proof.
+  intros a b m k a_bounds b_bounds a_eqmod_b.
+  cut (a - k = b - k).
+  + omega.
+  + apply Int.eqmod_small_eq with (modul := m).
+    - apply Int.eqmod_add.
+      * auto.
+      * apply Int.eqmod_refl.
+    - omega.
+    - omega.
+Qed.
+
+Lemma unsigned_eq_implies_repr_equal:
+  forall a b, Int.unsigned a = Int.unsigned b -> a = b.
+Proof.
+  intros a b unsigned_eq.
+  cut (Int.repr (Int.unsigned a) = Int.repr (Int.unsigned b)).
+  + repeat rewrite Int.repr_unsigned; auto.
+  + apply f_equal; auto.
+Qed.
+
+Lemma char_sign_ext_no_change:
+  forall a,
+  -128 <= a < 128 ->
+  Int.sign_ext 8 (Int.repr a) = Int.repr a.
+Proof.
+Admitted. (** FIXME **)
+
 Lemma char_sign_ext_zero_comp:
   forall a,
   -128 <= a < 128 ->
   Int.eq (Int.sign_ext 8 (Int.repr a)) (Int.repr 0) = Z.eqb a 0.
 Proof.
   intros a a_bounds.
-  assert (Int.sign_ext 8 (Int.repr a) = Int.repr 0 <-> a = 0).
-  {
-    split.
-    + admit. (** FIXME **)
-    + intros a_eq_0; rewrite a_eq_0; compute; auto.
-  }
   destruct (eq_dec a 0).
-  + rewrite e; compute; auto.
-  + cut ((a =? 0) = false).
-    - intros eq_false; rewrite eq_false.
-      apply Int.eq_false.
-      intros Habs.
-      apply n, H, Habs.
-   - apply Z.eqb_neq; auto.
+  + rewrite e; simpl; auto.
+  + assert ((a =? 0) = false) as a_neqb_0 by (apply Z.eqb_neq; auto).
+    rewrite a_neqb_0.
+    apply Int.eq_false.
+    rewrite char_sign_ext_no_change by auto.
+    apply char_zero_comp; auto.
 Qed.     
 
 Lemma cstring_len_ge_0:
