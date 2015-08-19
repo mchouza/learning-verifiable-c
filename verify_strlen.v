@@ -9,6 +9,27 @@ Local Open Scope logic.
 
 Definition Znth {A} i l def := nth (A := A) (Z.to_nat i) l def.
 
+Lemma in_split_1st {A}:
+  (forall x y:A, {x=y} + {x<>y}) ->
+  forall (a:A) l, 
+  In a l ->
+  exists l1 l2, l = l1 ++ a :: l2 /\
+  ~In a l1.
+Proof.
+  (** FIXME: CLEAN UP THE PROOF **)
+  intros H; induction l; simpl; destruct 1.
+  subst a0; auto.
+  exists nil, l; simpl; auto.
+  destruct (H a0 a).
+  subst a0; auto.
+  exists nil, l; simpl; auto.
+  destruct (IHl H0) as [l1 [l2 [H1 H2]]].
+  exists (a0 :: l1), l2; split.
+  rewrite H1, app_comm_cons; auto.
+  intro H3.
+  destruct H3; contradiction.
+Qed.
+
 Definition make_arr_fun l := fun i => Znth i l (Vint (Int.repr 1)).
 
 Inductive is_cstring: list int -> Prop :=
@@ -30,6 +51,9 @@ Fixpoint cstring_len (s:list int) :=
     end
   | nil => 0
   end.
+
+Definition is_char_array str :=
+  forall c, In c str -> -128 <= Int.signed c < 128.
 
 Definition has_nulls str :=
   exists i,
