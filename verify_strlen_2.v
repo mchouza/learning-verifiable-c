@@ -5,8 +5,7 @@ Require Import ZArith.
 Local Open Scope Z.
 
 Definition Znth {A} i l def := if i >=? 0 then nth (A := A) (Z.to_nat i) l def else def.
-
-Definition make_arr_fun l := fun i => Znth i l 1.
+Hint Unfold Znth.
 
 Definition is_char_array (s:list Z) :=
   forall c, In c s -> -128 <= c < 128.
@@ -73,6 +72,22 @@ Proof.
   rewrite cond_eq_true, cond_eq_true', succ_eq, Z2Nat.inj_succ by omega; auto.
 Qed.
 
+Lemma Znth_gen_prop {A}:
+  forall (d:A) s P,
+  (forall c, In c s -> P c) ->
+  P d ->
+  (forall i, P (Znth i s d)).
+Proof.
+  intros d s P P_in P_def i; unfold Znth.
+  assert (forall i, P (nth (Z.to_nat i) s d)) as P_nth.
+  {
+    intros i'; destruct (nth_in_or_default (Z.to_nat i') s d) as [is_in | is_def].
+    + apply P_in, is_in.
+    + rewrite is_def; apply P_def.
+  }
+  case (i >=? 0); [ apply P_nth | apply P_def ].
+Qed.
+  
 Lemma char_array_tail:
   forall c s, is_char_array (c :: s) -> is_char_array s.
 Proof.
@@ -165,3 +180,67 @@ Proof.
           rewrite j_eq, <-app_comm_cons, Znth_plus_1; try omega; apply IHp; omega; auto.
   }
 Qed.
+
+Lemma cstring_has_bounded_chars:
+  forall c s, is_cstring s -> In c s -> -128 <= c < 128.
+Proof.
+  intros c s [s_is_carr _] c_in_s; unfold is_char_array in *.
+  apply s_is_carr, c_in_s.
+Qed.
+  
+Add Rec LoadPath "../verifiable-c/vst".
+Add LoadPath "../verifiable-c/compcert" as compcert.
+
+Require Import floyd.proofauto.
+Require Import strlen.
+
+Local Open Scope logic.
+
+Definition Z2Vint z :=
+  Vint (Int.repr z).
+
+Lemma typecast_aux_lemma:
+  forall s,
+  is_int
+    (force_val
+       (sem_cast_i2i I8 Signed
+          ((fun i : Z => Vint (Int.repr (Znth i s 1))) 0))).
+Proof.
+  unfold Znth; simpl; auto.
+Qed.
+
+Definition my_strlen_spec :=
+  DECLARE _my_strlen
+    WITH s_arr: list Z, sh: share, s: val
+    PRE [ _s OF tptr tschar ]
+      PROP (is_cstring s_arr;
+            Zlength s_arr <= Int.max_signed)
+      LOCAL (`(eq s) (eval_id _s);
+             `isptr (eval_id _s))
+      SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i s_arr 1)))
+                     0 (Zlength s_arr) s))
+    POST [ tuint ]
+      PROP ()
+      LOCAL (`(eq (Vint (Int.repr (strlen s_arr)))) retval)
+      SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i s_arr 1)))
+                     0 (Zlength s_arr) s)).
+
+Definition Vprog : varspecs := nil.
+Definition Gprog : funspecs := my_strlen_spec :: nil.
+
+Lemma body_my_strlen:
+  semax_body Vprog Gprog f_my_strlen my_strlen_spec.
+Proof.
+  start_function.
+  name s_ _s.
+  name i_ _i.
+  name c_ _c.
+  forward.
+  forward.
+  {
+    entailer!.
+    + assert (0 <= strlen s_arr < Zlength s_arr) by (apply cstring_strlen_bounds; auto); omega.
+    + apply typecast_aux_lemma.
+  }
+  (** FIXME: FINISH **)
+Admitted.
