@@ -16,18 +16,15 @@ Lemma in_split_1st {A}:
   exists l1 l2, l = l1 ++ a :: l2 /\
   ~In a l1.
 Proof.
-  (** FIXME: CLEAN UP THE PROOF **)
-  intros H; induction l; simpl; destruct 1.
-  subst a0; auto.
-  exists nil, l; simpl; auto.
-  destruct (H a0 a).
-  subst a0; auto.
-  exists nil, l; simpl; auto.
-  destruct (IHl H0) as [l1 [l2 [H1 H2]]].
-  exists (a0 :: l1), l2; split.
-  rewrite H1, app_comm_cons; auto.
-  intro H3.
-  destruct H3; contradiction.
+  intros eq_dec a l a_in_l.
+  induction l.
+  + simpl in a_in_l; contradiction.
+  + destruct a_in_l, (eq_dec a a0).
+    - exists nil, l; subst a0; simpl; auto.
+    - symmetry in H; contradiction.
+    - exists nil, l; subst a0; simpl; auto.
+    - destruct (IHl H) as (l1 & l2 & induct_eq & not_in_prefix).      
+      exists (a0 :: l1), l2; subst l; firstorder.
 Qed.
 
 Definition make_arr_fun l := fun i => Znth i l (Vint (Int.repr 1)).
@@ -40,6 +37,12 @@ Inductive is_cstring: list int -> Prop :=
 | cs_append:
     forall c s, -128 <= Int.signed c < 128 -> is_cstring s ->
     is_cstring (s ++ (c :: nil)).
+
+Definition is_char_array (s:list int) :=
+  forall c, In c s -> -128 <= Int.signed c < 128.
+
+Definition is_cstring' (s:list int) :=
+  is_char_array s /\ In (Int.repr 0) s.
 
 Fixpoint cstring_len (s:list int) :=
   match s with
