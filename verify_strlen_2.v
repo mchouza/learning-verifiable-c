@@ -58,9 +58,19 @@ Proof.
 Qed.
 
 Lemma Znth_0 {A}:
-  forall (c:A) l d, Znth 0 (c :: l) d = c.
+  forall (a:A) l d, Znth 0 (a :: l) d = a.
 Proof.
   intros; unfold Znth; auto.
+Qed.
+
+Lemma Znth_plus_1 {A}:
+  forall (a:A) i l d, i >= 0 -> Znth (i + 1) (a :: l) d = Znth i l d.
+Proof.
+  intros; unfold Znth; simpl.
+  assert (i + 1 = Z.succ i) as succ_eq by omega.
+  assert (i + 1 >=? 0 = true) as cond_eq_true by (apply Z.geb_le; omega).
+  assert (i >=? 0 = true) as cond_eq_true' by (apply Z.geb_le; omega).
+  rewrite cond_eq_true, cond_eq_true', succ_eq, Z2Nat.inj_succ by omega; auto.
 Qed.
 
 Lemma char_array_tail:
@@ -102,6 +112,14 @@ Proof.
   destruct c; simpl; try intros; omega.
 Qed.
 
+Lemma strlen_nz_prefix:
+  forall c s, c <> 0 -> strlen (c :: s) = strlen s + 1.
+  intros; destruct c.
+  + exfalso; apply H; auto.
+  + simpl; auto.
+  + simpl; auto.
+Qed.
+
 Lemma cstring_strlen_bounds:
   forall s, is_cstring s -> 0 <= strlen s < Zlength s.
 Proof.
@@ -124,9 +142,26 @@ Lemma cstring_strlen_content:
 Proof.
   intros s [_ s_has_null].
   assert (exists p t, (s = p ++ 0 :: t) /\ ~In 0 p) as
-    (p & t & s_splitted & p_has_no_null) by
+    (p & t & s_splitted & prefix_has_no_null) by
     (apply (in_split_1st Z.eq_dec); auto).
   clear s_has_null; subst s; induction p.
-  + simpl; rewrite Znth_0; split; try intros; omega.
-  + admit. (** FIXME **)
+  {
+    simpl; rewrite Znth_0; split; try intros; omega.
+  }
+  {
+    assert (~In 0 p) as p_has_no_null by
+      (intros abs; apply prefix_has_no_null, in_cons; auto).
+    specialize (IHp p_has_no_null).
+    destruct (Z.eq_dec a 0).
+    + subst a; exfalso; apply prefix_has_no_null, in_eq.
+    + split.
+      - rewrite <-app_comm_cons, strlen_nz_prefix, Znth_plus_1; auto.
+        * apply IHp.
+        * assert (0 <= strlen (p ++ 0 :: t)) by (apply strlen_abs_bounds; auto); omega.
+      - intros j j_bounds; destruct (Z.eq_dec j 0).
+        * rewrite e, <-app_comm_cons, Znth_0; auto.
+        * assert (j = j - 1 + 1) as j_eq by omega.
+          rewrite <-app_comm_cons, strlen_nz_prefix in j_bounds by auto.
+          rewrite j_eq, <-app_comm_cons, Znth_plus_1; try omega; apply IHp; omega; auto.
+  }
 Qed.
