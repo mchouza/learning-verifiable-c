@@ -72,6 +72,17 @@ Proof.
   rewrite cond_eq_true, cond_eq_true', succ_eq, Z2Nat.inj_succ by omega; auto.
 Qed.
 
+Lemma Znth_def_indep {A}:
+  forall (l:list A) i d1 d2, 
+  0 <= i < Zlength l -> Znth i l d1 = Znth i l d2.
+Proof.
+  intros l i d1 d2 i_bounds; unfold Znth; rewrite Zlength_correct in *.
+  assert (i >=? 0 = true) as i_ge_0_true by (apply Z.geb_le; omega).
+  rewrite i_ge_0_true.
+  apply nth_indep, Nat2Z.inj_lt.
+  rewrite Z2Nat.id; omega.
+Qed.
+
 Lemma Znth_gen_prop {A}:
   forall (d:A) s P,
   (forall c, In c s -> P c) ->
@@ -87,7 +98,16 @@ Proof.
   }
   case (i >=? 0); [ apply P_nth | apply P_def ].
 Qed.
-  
+
+Lemma Znth_in {A}:
+  forall (l:list A) i d, 0 <= i < Zlength l -> In (Znth i l d) l.
+Proof.
+  intros; unfold Znth; rewrite Zlength_correct in *.
+  assert (i >=? 0 = true) as i_ge_0_true by (apply Z.geb_le; omega).
+  rewrite i_ge_0_true.
+  apply nth_In, Nat2Z.inj_lt; rewrite Z2Nat.id; omega.
+Qed.
+
 Lemma char_array_tail:
   forall c s, is_char_array (c :: s) -> is_char_array s.
 Proof.
@@ -150,12 +170,12 @@ Proof.
 Qed.
 
 Lemma cstring_strlen_content:
-  forall s,
+  forall s d,
   is_cstring s ->
-  Znth (strlen s) s 1 = 0 /\
-  forall j, 0 <= j < strlen s -> Znth j s 1 <> 0.
+  Znth (strlen s) s d = 0 /\
+  forall j, 0 <= j < strlen s -> Znth j s d <> 0.
 Proof.
-  intros s [_ s_has_null].
+  intros s d [_ s_has_null].
   assert (exists p t, (s = p ++ 0 :: t) /\ ~In 0 p) as
     (p & t & s_splitted & prefix_has_no_null) by
     (apply (in_split_1st Z.eq_dec); auto).
@@ -199,6 +219,26 @@ Local Open Scope logic.
 Definition Z2Vint z :=
   Vint (Int.repr z).
 
+Lemma eqmod_small_eq_shifted:
+  forall a b m k,
+  k <= a < m + k ->
+  k <= b < m + k ->
+  Int.eqmod m a b ->
+  a = b.
+Proof.
+  intros a b m k a_bounds b_bounds a_eqmod_b.
+  cut (a - k = b - k); try omega.
+  apply Int.eqmod_small_eq with (modul := m); try omega.
+  apply Int.eqmod_add, Int.eqmod_refl; auto.
+Qed.
+
+Lemma char_cast_doesnt_change_char:
+  forall a,
+  -128 <= a < 128 ->
+  Int.signed (Int.sign_ext 8 (Int.repr a)) = a.
+Proof.
+Admitted. (** FIXME **)
+
 Lemma typecast_aux_lemma:
   forall s,
   is_int
@@ -208,6 +248,25 @@ Lemma typecast_aux_lemma:
 Proof.
   unfold Znth; simpl; auto.
 Qed.
+
+Lemma cstring_end_lemma:
+  forall i s,
+  is_cstring s ->
+  0 <= i <= strlen s ->
+  negb (Int.eq (Int.sign_ext 8 (Int.repr (Znth i s 0)))
+               (Int.repr 0)) = false ->
+  strlen s = i.
+Proof.
+  intros i s s_is_cstr strlen_s_bounds loop_cond; simpl in *.
+  assert (0 <= strlen s < Zlength s) as len_bounds by (apply cstring_strlen_bounds; auto).
+  assert (-128 <= Znth i s 0 < 128) as char_bound by (apply s_is_cstr, Znth_in; omega).
+  rewrite <-Int.repr_signed with (i := Int.sign_ext 8 (Int.repr (Znth i s 0))) in loop_cond.
+  rewrite negb_false_iff, char_cast_doesnt_change_char in loop_cond by auto.
+  destruct (eq_dec i (strlen s)).
+  + auto.
+  + assert (0 <= i < strlen s) by omega.
+    assert (Znth i s 0 <> 0) by (apply cstring_strlen_content; auto).
+Admitted. (** FIXME **)
 
 Definition my_strlen_spec :=
   DECLARE _my_strlen
@@ -241,6 +300,40 @@ Proof.
     entailer!.
     + assert (0 <= strlen s_arr < Zlength s_arr) by (apply cstring_strlen_bounds; auto); omega.
     + apply typecast_aux_lemma.
+  }
+  forward_while
+  (EX i:Z, EX c:Z,
+   PROP (forall j, 0 <= j < i -> Znth j s_arr 0 <> 0;
+         0 <= i <= strlen s_arr;
+         c = Znth i s_arr 0)
+   LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i);
+          `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
+          `(eq s) (eval_id _s);
+          `isptr (eval_id _s))
+   SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i s_arr 1)))
+                  0 (Zlength s_arr) s)))
+  (PROP ()
+   LOCAL (`(eq (Vint (Int.repr (strlen s_arr)))) (eval_id _i);
+          `(eq s) (eval_id _s))
+   SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i s_arr 1)))
+                  0 (Zlength s_arr) s))).
+  {
+    apply exp_right with 0.
+    apply exp_right with (Znth 0 s_arr 0).
+    entailer!.
+    + intros; omega.
+    + assert (0 <= strlen s_arr) by apply strlen_abs_bounds; omega.
+    + assert (0 <= strlen s_arr < Zlength s_arr) by (apply cstring_strlen_bounds; auto).
+      rewrite Znth_def_indep with (d2 := 1) by omega; auto.
+  }
+  {
+    entailer!.
+  }
+  {
+    entailer!.
+    + cut (strlen s_arr = i).
+      - apply f_equal.
+      - apply cstring_end_lemma; auto.
   }
   (** FIXME: FINISH **)
 Admitted.
