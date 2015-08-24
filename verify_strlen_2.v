@@ -249,6 +249,16 @@ Proof.
   unfold Znth; simpl; auto.
 Qed.
 
+Lemma cstring_in_lemma:
+  forall i s,
+  is_cstring s ->
+  0 <= i <= strlen s ->
+  negb (Int.eq (Int.sign_ext 8 (Int.repr (Znth i s 0)))
+               (Int.repr 0)) = true ->
+  i < strlen s.
+Proof.
+Admitted. (** FIXME **)
+
 Lemma cstring_end_lemma:
   forall i s,
   is_cstring s ->
@@ -335,5 +345,29 @@ Proof.
       - apply f_equal.
       - apply cstring_end_lemma; auto.
   }
-  (** FIXME: FINISH **)
-Admitted.
+  {
+    forward.
+    forward.
+    {
+      assert (0 <= strlen s_arr < Zlength s_arr) by (apply cstring_strlen_bounds; auto).
+      assert (i < strlen s_arr) by (apply cstring_in_lemma; auto).
+      entailer!.
+      + omega.
+      + apply typecast_aux_lemma; auto.
+    }
+    {
+      apply exp_right with (i + 1).
+      apply exp_right with (Znth (i + 1) s_arr 0).
+      entailer!.
+      - assert (i < strlen s_arr) by (apply cstring_in_lemma; auto).
+        intros; apply cstring_strlen_content; auto; omega.
+      - assert (i < strlen s_arr) by (apply cstring_in_lemma; auto); omega.
+      - assert (i < strlen s_arr) by (apply cstring_in_lemma; auto).
+        assert (0 <= strlen s_arr < Zlength s_arr) by (apply cstring_strlen_bounds; auto).
+        rewrite Int.signed_repr.
+        * rewrite Znth_def_indep with (d2 := 1); auto; omega.
+        * assert (Int.min_signed < 0) by apply Int.min_signed_neg; omega.
+    }
+  }
+  forward.
+Qed.
