@@ -229,12 +229,52 @@ Proof.
   apply Int.eqmod_add, Int.eqmod_refl; auto.
 Qed.
 
+Lemma eqmod_unsigned_repr:
+  forall i n,
+  0 < n < Int.zwordsize ->
+  Int.eqmod (two_p n) (Int.unsigned (Int.repr i)) i.
+Proof.
+  intros i n n_bounds.
+  apply Int.eqmod_divides with (n := Int.modulus).
+  + fold Int.eqm.
+    apply Int.eqm_unsigned_repr_l, Int.eqm_refl.
+  + unfold Int.modulus.
+    rewrite two_power_nat_two_p.
+    fold Int.zwordsize.
+    exists (two_p (Int.zwordsize - n)).
+    rewrite <-two_p_is_exp by omega.
+    assert (Int.zwordsize = Int.zwordsize - n + n) as ws_eq by omega.
+    rewrite ws_eq at 1; auto.
+Qed.
+
 Lemma signed_ext_idempotence:
   forall i n,
+  0 < n < Int.zwordsize ->
   -two_p (n - 1) <= i < two_p (n - 1) ->
   Int.sign_ext n (Int.repr i) = Int.repr i.
 Proof.
-Admitted. (** FIXME **)
+  intros i n n_bounds i_bounds.
+  assert (two_p n + - two_p (n - 1) = two_p (n - 1)) as two_p_eq.
+  {
+    assert (n = Z.succ (n - 1)) as n_eq by omega.
+    rewrite n_eq at 1.
+    rewrite two_p_S by omega.
+    ring.
+  }
+  rewrite <-Int.repr_signed with (i := Int.sign_ext n (Int.repr i)).
+  apply f_equal.
+  apply eqmod_small_eq_shifted with (m := two_p n) (k := -two_p (n - 1)).
+  + rewrite two_p_eq.
+    apply Int.sign_ext_range; auto.
+  + omega.
+  + assert (Int.eqmod (two_p n)
+                      (Int.signed (Int.sign_ext n (Int.repr i)))
+                      (Int.unsigned (Int.repr i))) as eq_1 by
+      (apply Int.eqmod_sign_ext; auto).
+    assert (Int.eqmod (two_p n) (Int.unsigned (Int.repr i)) i) as eq_2 by
+      (apply eqmod_unsigned_repr; auto).
+    apply Int.eqmod_trans with (y := (Int.unsigned (Int.repr i))); auto.
+Qed.
 
 Lemma bool_char_eq_value:
   forall s i,
@@ -245,11 +285,25 @@ Lemma bool_char_eq_value:
   negb (Z.eqb (Znth i s 0) 0).
 Proof.
   intros s i s_is_carr i_bounds.
-  rewrite signed_ext_idempotence.
-  + admit. (** FIXME **)
-  + apply s_is_carr, Znth_in; auto.
+  assert (-128 <= Znth i s 0 < 128) as char_bound by (apply s_is_carr, Znth_in; auto).
+  rewrite signed_ext_idempotence by (compute; auto).
+  apply f_equal.
+  destruct (eq_dec (Znth i s 0) 0).
+  + rewrite e; simpl; apply Int.eq_true.
+  + rewrite Int.eq_false.
+    - symmetry; rewrite Z.eqb_neq; auto.
+    - intros repr_eq.    
+      assert (Znth i s 0 = 0) as abs.
+      {
+        rewrite <-Int.signed_repr with (z := Znth i s 0) by
+          (unfold Int.min_signed, Int.max_signed; simpl; omega).
+        rewrite <-Int.signed_repr with (z := 0) at 2 by
+          (unfold Int.min_signed, Int.max_signed; simpl; omega).
+        rewrite repr_eq; auto.
+      }
+      contradiction.
 Qed.
-
+        
 Lemma typecast_aux_lemma:
   forall s,
   is_int
