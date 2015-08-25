@@ -367,8 +367,30 @@ Definition my_strlen_spec :=
       SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i s_arr 1)))
                      0 (Zlength s_arr) s)).
 
+Definition my_strcpy_spec :=
+  DECLARE _my_strcpy
+    WITH src_arr: list Z, dst_arr:list Z, sh: share, src:val, dst:val
+    PRE [ _src OF tptr tschar ]
+      PROP (is_cstring src_arr;
+            Zlength src_arr <= Int.max_signed;
+            Zlength dst_arr > strlen src_arr)
+      LOCAL (`(eq src) (eval_id _src);
+             `(eq dst) (eval_id _dst);
+             `isptr (eval_id _src);
+             `isptr (eval_id _dst))
+      SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
+                     0 (Zlength src_arr) src);
+          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_arr 1)))
+                     0 (Zlength dst_arr) dst))
+    POST [ tptr tschar ]
+      PROP ()
+      LOCAL (`(eq dst) retval)
+      SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
+                     0 (Zlength src_arr) src)).
+(** FIXME: COMPLETE SPEC **)
+
 Definition Vprog : varspecs := nil.
-Definition Gprog : funspecs := my_strlen_spec :: nil.
+Definition Gprog : funspecs := my_strlen_spec :: my_strcpy_spec :: nil.
 
 Lemma body_my_strlen:
   semax_body Vprog Gprog f_my_strlen my_strlen_spec.
@@ -443,4 +465,38 @@ Proof.
     }
   }
   forward.
+Qed.
+
+Lemma body_my_strcpy:
+  semax_body Vprog Gprog f_my_strcpy my_strcpy_spec.
+Proof.
+  start_function.
+  name src_ _src.
+  name dst_ _dst.
+  name c_ _c.
+  name d_ _d.
+  forward.
+  {
+    entailer!.
+    admit. (** FIXME **)
+  }
+  forward.
+  forward_while (PROP()LOCAL()SEP()) (PROP()LOCAL()SEP()). (** FIXME **)
+  {
+    entailer!.
+    admit. (** FIXME **)
+  }
+  {
+    entailer!.
+  }
+  {
+    entailer!.
+  }
+  {
+    admit. (** FIXME **)
+  }
+  forward.
+  {
+    admit. (** FIXME **)
+  }
 Qed.

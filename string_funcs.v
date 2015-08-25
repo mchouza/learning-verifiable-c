@@ -2,7 +2,7 @@ Require Import Clightdefs.
 
 Local Open Scope Z_scope.
 
-Definition _main : ident := 40%positive.
+Definition _my_strcpy : ident := 40%positive.
 Definition ___builtin_read32_reversed : ident := 32%positive.
 Definition ___compcert_va_int32 : ident := 16%positive.
 Definition _src : ident := 38%positive.
@@ -22,7 +22,7 @@ Definition ___builtin_va_copy : ident := 14%positive.
 Definition ___builtin_mull : ident := 6%positive.
 Definition ___builtin_fmin : ident := 26%positive.
 Definition ___builtin_bswap : ident := 19%positive.
-Definition _my_strcpy : ident := 39%positive.
+Definition _d : ident := 39%positive.
 Definition ___builtin_membar : ident := 11%positive.
 Definition _dst : ident := 37%positive.
 Definition ___builtin_addl : ident := 4%positive.
@@ -31,6 +31,7 @@ Definition ___builtin_fabs : ident := 7%positive.
 Definition ___builtin_bswap16 : ident := 21%positive.
 Definition ___compcert_va_float64 : ident := 18%positive.
 Definition ___builtin_annot : ident := 9%positive.
+Definition _main : ident := 41%positive.
 Definition ___builtin_va_arg : ident := 13%positive.
 Definition ___builtin_fmadd : ident := 27%positive.
 Definition _s : ident := 33%positive.
@@ -79,27 +80,29 @@ Definition f_my_strcpy := {|
   fn_callconv := cc_default;
   fn_params := ((_dst, (tptr tschar)) :: (_src, (tptr tschar)) :: nil);
   fn_vars := nil;
-  fn_temps := ((_c, tschar) :: nil);
+  fn_temps := ((_c, tschar) :: (_d, (tptr tschar)) :: nil);
   fn_body :=
 (Ssequence
-  (Sloop
+  (Sset _c (Ecast (Econst_int (Int.repr 1) tint) tschar))
+  (Ssequence
+    (Sset _d (Etempvar _dst (tptr tschar)))
     (Ssequence
-      (Sset _c (Ecast (Ederef (Etempvar _src (tptr tschar)) tschar) tschar))
-      (Ssequence
-        (Sassign (Ederef (Etempvar _dst (tptr tschar)) tschar)
-          (Etempvar _c tschar))
+      (Swhile
+        (Etempvar _c tschar)
         (Ssequence
-          (Sset _src
-            (Ebinop Oadd (Etempvar _src (tptr tschar))
-              (Econst_int (Int.repr 1) tint) (tptr tschar)))
-          (Sset _dst
-            (Ebinop Oadd (Etempvar _dst (tptr tschar))
-              (Econst_int (Int.repr 1) tint) (tptr tschar))))))
-    (Sifthenelse (Ebinop One (Etempvar _c tschar)
-                   (Econst_int (Int.repr 0) tint) tint)
-      Sskip
-      Sbreak))
-  (Sreturn (Some (Etempvar _dst (tptr tschar)))))
+          (Sset _c
+            (Ecast (Ederef (Etempvar _src (tptr tschar)) tschar) tschar))
+          (Ssequence
+            (Sassign (Ederef (Etempvar _dst (tptr tschar)) tschar)
+              (Etempvar _c tschar))
+            (Ssequence
+              (Sset _src
+                (Ebinop Oadd (Etempvar _src (tptr tschar))
+                  (Econst_int (Int.repr 1) tint) (tptr tschar)))
+              (Sset _dst
+                (Ebinop Oadd (Etempvar _dst (tptr tschar))
+                  (Econst_int (Int.repr 1) tint) (tptr tschar)))))))
+      (Sreturn (Some (Etempvar _d (tptr tschar)))))))
 |}.
 
 Definition prog : Clight.program := {|

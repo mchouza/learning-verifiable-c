@@ -12,12 +12,15 @@ unsigned my_strlen( const char *s )
 
 char *my_strcpy( char *dst, const char *src )
 {
-	char c;
-    do
+	/* implementation intentionally uses pointer arithmetic */
+	char c = 1;
+	char *d = dst;
+    while (c)
     {
     	c = *src;
     	*dst = c;
-    	src++, dst++;
-    } while (c != '\0');
-    return dst;
+    	src++;
+    	dst++;
+    };
+    return d;
 }
