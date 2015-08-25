@@ -212,7 +212,7 @@ Add Rec LoadPath "../verifiable-c/vst".
 Add LoadPath "../verifiable-c/compcert" as compcert.
 
 Require Import floyd.proofauto.
-Require Import strlen.
+Require Import string_funcs.
 
 Local Open Scope logic.
 
