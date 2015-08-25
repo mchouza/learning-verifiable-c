@@ -216,9 +216,6 @@ Require Import strlen.
 
 Local Open Scope logic.
 
-Definition Z2Vint z :=
-  Vint (Int.repr z).
-
 Lemma eqmod_small_eq_shifted:
   forall a b m k,
   k <= a < m + k ->
@@ -232,12 +229,26 @@ Proof.
   apply Int.eqmod_add, Int.eqmod_refl; auto.
 Qed.
 
-Lemma char_cast_doesnt_change_char:
-  forall a,
-  -128 <= a < 128 ->
-  Int.signed (Int.sign_ext 8 (Int.repr a)) = a.
+Lemma signed_ext_idempotence:
+  forall i n,
+  -two_p (n - 1) <= i < two_p (n - 1) ->
+  Int.sign_ext n (Int.repr i) = Int.repr i.
 Proof.
 Admitted. (** FIXME **)
+
+Lemma bool_char_eq_value:
+  forall s i,
+  is_char_array s ->
+  0 <= i < Zlength s ->
+  negb (Int.eq (Int.sign_ext 8 (Int.repr (Znth i s 0)))
+               (Int.repr 0)) = 
+  negb (Z.eqb (Znth i s 0) 0).
+Proof.
+  intros s i s_is_carr i_bounds.
+  rewrite signed_ext_idempotence.
+  + admit. (** FIXME **)
+  + apply s_is_carr, Znth_in; auto.
+Qed.
 
 Lemma typecast_aux_lemma:
   forall s,
@@ -257,7 +268,14 @@ Lemma cstring_in_lemma:
                (Int.repr 0)) = true ->
   i < strlen s.
 Proof.
-Admitted. (** FIXME **)
+  intros i s s_is_cstr strlen_s_bounds char_eq.
+  assert (0 <= strlen s < Zlength s) by (apply cstring_strlen_bounds; auto).
+  rewrite bool_char_eq_value in char_eq by (destruct s_is_cstr; auto; omega).
+  destruct (eq_dec i (strlen s)).
+  + assert (Znth i s 0 = 0) as s_i_is_null by (rewrite e; apply cstring_strlen_content; auto).
+    rewrite s_i_is_null in char_eq; simpl in char_eq; discriminate.
+  + omega.
+Qed.
 
 Lemma cstring_end_lemma:
   forall i s,
@@ -267,16 +285,17 @@ Lemma cstring_end_lemma:
                (Int.repr 0)) = false ->
   strlen s = i.
 Proof.
-  intros i s s_is_cstr strlen_s_bounds loop_cond; simpl in *.
-  assert (0 <= strlen s < Zlength s) as len_bounds by (apply cstring_strlen_bounds; auto).
-  assert (-128 <= Znth i s 0 < 128) as char_bound by (apply s_is_cstr, Znth_in; omega).
-  rewrite <-Int.repr_signed with (i := Int.sign_ext 8 (Int.repr (Znth i s 0))) in loop_cond.
-  rewrite negb_false_iff, char_cast_doesnt_change_char in loop_cond by auto.
+  intros i s s_is_cstr strlen_s_bounds char_eq.
+  assert (0 <= strlen s < Zlength s) by (apply cstring_strlen_bounds; auto).
+  rewrite bool_char_eq_value in char_eq by (destruct s_is_cstr; auto; omega).
   destruct (eq_dec i (strlen s)).
   + auto.
-  + assert (0 <= i < strlen s) by omega.
-    assert (Znth i s 0 <> 0) by (apply cstring_strlen_content; auto).
-Admitted. (** FIXME **)
+  + assert (forall j, 0 <= j < strlen s -> Znth j s 0 <> 0) as s_content_not_null by
+      (apply cstring_strlen_content; auto).
+    assert (Znth i s 0 <> 0) as char_ineq by (apply s_content_not_null; omega).
+    assert (Znth i s 0 =? 0 = false) as char_eq_is_false by (apply Z.eqb_neq; auto).
+    rewrite char_eq_is_false in char_eq; simpl in char_eq; discriminate.
+Qed.
 
 Definition my_strlen_spec :=
   DECLARE _my_strlen
