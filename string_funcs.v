@@ -80,21 +80,20 @@ Definition f_my_strcpy := {|
   fn_callconv := cc_default;
   fn_params := ((_dst, (tptr tschar)) :: (_src, (tptr tschar)) :: nil);
   fn_vars := nil;
-  fn_temps := ((_c, tschar) :: (_d, (tptr tschar)) :: nil);
+  fn_temps := ((_c, tint) :: (_d, (tptr tschar)) :: nil);
   fn_body :=
 (Ssequence
-  (Sset _c (Ecast (Econst_int (Int.repr 1) tint) tschar))
+  (Sset _c (Econst_int (Int.repr 1) tint))
   (Ssequence
     (Sset _d (Etempvar _dst (tptr tschar)))
     (Ssequence
       (Swhile
-        (Etempvar _c tschar)
+        (Etempvar _c tint)
         (Ssequence
-          (Sset _c
-            (Ecast (Ederef (Etempvar _src (tptr tschar)) tschar) tschar))
+          (Sset _c (Ederef (Etempvar _src (tptr tschar)) tschar))
           (Ssequence
             (Sassign (Ederef (Etempvar _dst (tptr tschar)) tschar)
-              (Etempvar _c tschar))
+              (Etempvar _c tint))
             (Ssequence
               (Sset _src
                 (Ebinop Oadd (Etempvar _src (tptr tschar))

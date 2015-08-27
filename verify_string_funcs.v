@@ -481,10 +481,6 @@ Proof.
   name c_ _c.
   name d_ _d.
   forward.
-  {
-    entailer!.
-    admit. (** FIXME **)
-  }
   forward.
   forward_while (PROP()LOCAL()SEP()) (PROP()LOCAL()SEP()). (** FIXME **)
   {
