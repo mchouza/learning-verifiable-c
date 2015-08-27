@@ -369,25 +369,30 @@ Definition my_strlen_spec :=
 
 Definition my_strcpy_spec :=
   DECLARE _my_strcpy
-    WITH src_arr: list Z, dst_arr:list Z, sh: share, src:val, dst:val
+    WITH src_arr: list Z, dst_ini_arr:list Z, dst_fin_arr:list Z, sh: share,
+         src:val, dst:val
     PRE [ _src OF tptr tschar ]
       PROP (is_cstring src_arr;
             Zlength src_arr <= Int.max_signed;
-            Zlength dst_arr > strlen src_arr)
+            Zlength dst_ini_arr <= Int.max_signed;
+            Zlength dst_fin_arr = Zlength dst_ini_arr;
+            Zlength dst_ini_arr > strlen src_arr)
       LOCAL (`(eq src) (eval_id _src);
              `(eq dst) (eval_id _dst);
              `isptr (eval_id _src);
              `isptr (eval_id _dst))
       SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
                      0 (Zlength src_arr) src);
-          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_arr 1)))
-                     0 (Zlength dst_arr) dst))
+          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_ini_arr 1)))
+                     0 (Zlength dst_ini_arr) dst))
     POST [ tptr tschar ]
-      PROP ()
+      PROP (forall i,
+            0 <= i < strlen src_arr -> Znth i dst_fin_arr 1 = Znth i src_arr 1)
       LOCAL (`(eq dst) retval)
       SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
-                     0 (Zlength src_arr) src)).
-(** FIXME: COMPLETE SPEC **)
+                     0 (Zlength src_arr) src);
+          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_fin_arr 1)))
+                     0 (Zlength dst_fin_arr) dst)).
 
 Definition Vprog : varspecs := nil.
 Definition Gprog : funspecs := my_strlen_spec :: my_strcpy_spec :: nil.
