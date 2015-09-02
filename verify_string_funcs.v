@@ -369,29 +369,33 @@ Definition my_strlen_spec :=
 
 Definition my_strcpy_spec :=
   DECLARE _my_strcpy
-    WITH src_arr: list Z, dst_ini_arr:list Z, dst_fin_arr:list Z, sh: share,
-         src:val, dst:val
+    WITH src_arr:list Z, dst_ini_arr:list Z, dst_fin_arr:list Z, sh: share,
+         wsh:share, src:val, dst:val
     PRE [ _src OF tptr tschar ]
       PROP (is_cstring src_arr;
             Zlength src_arr <= Int.max_signed;
             Zlength dst_ini_arr <= Int.max_signed;
+            Zlength dst_ini_arr > strlen src_arr;
             Zlength dst_fin_arr = Zlength dst_ini_arr;
-            Zlength dst_ini_arr > strlen src_arr)
+            forall i,
+            0 <= i < strlen src_arr -> Znth i dst_fin_arr 1 = Znth i src_arr 1;
+            forall i,
+            strlen src_arr <= i -> Znth i dst_fin_arr 1 = Znth i dst_ini_arr 1;
+            writable_share wsh)
       LOCAL (`(eq src) (eval_id _src);
              `(eq dst) (eval_id _dst);
              `isptr (eval_id _src);
              `isptr (eval_id _dst))
       SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
                      0 (Zlength src_arr) src);
-          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_ini_arr 1)))
+          `(array_at tschar wsh (fun i => Vint (Int.repr (Znth i dst_ini_arr 1)))
                      0 (Zlength dst_ini_arr) dst))
     POST [ tptr tschar ]
-      PROP (forall i,
-            0 <= i < strlen src_arr -> Znth i dst_fin_arr 1 = Znth i src_arr 1)
+      PROP ()
       LOCAL (`(eq dst) retval)
       SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
                      0 (Zlength src_arr) src);
-          `(array_at tschar sh (fun i => Vint (Int.repr (Znth i dst_fin_arr 1)))
+          `(array_at tschar wsh (fun i => Vint (Int.repr (Znth i dst_fin_arr 1)))
                      0 (Zlength dst_fin_arr) dst)).
 
 Definition Vprog : varspecs := nil.
@@ -479,25 +483,73 @@ Proof.
   name src_ _src.
   name dst_ _dst.
   name c_ _c.
-  name d_ _d.
+  name i_ _i.
   forward.
   forward.
-  forward_while (PROP()LOCAL()SEP()) (PROP()LOCAL()SEP()). (** FIXME **)
+  {
+    entailer!.
+    + assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+      omega.
+    + apply typecast_aux_lemma.
+  }
+  forward_while
+  (EX i:Z, EX c:Z, EX dst_arr:list Z,
+   PROP(Zlength dst_arr = Zlength dst_ini_arr;
+        forall j,
+        0 <= j < i ->
+        Znth j dst_arr 1 = Znth j src_arr 1;
+        forall j,
+        i <= j ->
+        Znth j dst_arr 1 = Znth j dst_ini_arr 1;
+        0 <= i <= strlen src_arr)
+   LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i);
+          `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
+          `(eq src) (eval_id _src);
+          `(eq dst) (eval_id _dst);
+          `isptr (eval_id _src))
+   SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
+                  0 (Zlength src_arr) src);
+       `(array_at tschar wsh (fun i => Vint (Int.repr (Znth i dst_arr 1)))
+                  0 (Zlength dst_arr) dst)))
+  (PROP ()
+   LOCAL (`(eq dst) (eval_id _dst))
+   SEP(`(array_at tschar sh (fun i => Vint (Int.repr (Znth i src_arr 1)))
+                  0 (Zlength src_arr) src);
+       `(array_at tschar wsh (fun i => Vint (Int.repr (Znth i dst_fin_arr 1)))
+                  0 (Zlength dst_fin_arr) dst))).
+  {
+    apply exp_right with 0.
+    apply exp_right with (Znth 0 src_arr 0).
+    apply exp_right with dst_ini_arr.
+    entailer!.
+    + intros; omega.
+    + assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+      omega.
+    + assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+      rewrite Znth_def_indep with (d2 := 1); auto; omega.
+  }
+  {
+    entailer!.
+  }
   {
     entailer!.
     admit. (** FIXME **)
   }
   {
-    entailer!.
-  }
-  {
-    entailer!.
-  }
-  {
+    forward.
+    {
+      entailer!.
+      + admit. (** FIXME **)
+      + instantiate (1 := Vint (Int.repr 1)); admit. (** FIXME **)
+    }
+    forward.
+    forward.
+    {
+      entailer!.
+      + admit. (** FIXME **)
+      + apply typecast_aux_lemma; auto.
+    }
     admit. (** FIXME **)
   }
   forward.
-  {
-    admit. (** FIXME **)
-  }
 Qed.
