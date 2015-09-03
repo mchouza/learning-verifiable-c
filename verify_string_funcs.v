@@ -56,6 +56,12 @@ Proof.
   intros; rewrite Zlength_correct; apply Nat2Z.is_nonneg.
 Qed.
 
+Lemma Zlength_0_implies_nil {A}:
+  forall (l:list A), Zlength l = 0 -> l = nil.
+Proof.
+  destruct l; auto; cut (0 <= Zlength l); [rewrite Zlength_cons; omega | apply Zlength_ge_0].
+Qed.
+
 Lemma Znth_0 {A}:
   forall (a:A) l d, Znth 0 (a :: l) d = a.
 Proof.
@@ -106,6 +112,49 @@ Proof.
   assert (i >=? 0 = true) as i_ge_0_true by (apply Z.geb_le; omega).
   rewrite i_ge_0_true.
   apply nth_In, Nat2Z.inj_lt; rewrite Z2Nat.id; omega.
+Qed.
+
+Lemma Znth_equiv {A}:
+  forall (l l':list A) d,
+  Zlength l = Zlength l' ->
+  (forall i, 0 <= i < Zlength l ->
+   Znth i l d = Znth i l' d) ->
+  l = l'.
+Proof.
+  induction l.
+  + intros; rewrite Zlength_nil in H; symmetry; apply Zlength_0_implies_nil; omega.
+  + intros.
+    assert (0 <= Zlength l) by (apply Zlength_ge_0).
+    destruct l'.
+    - rewrite Zlength_nil, Zlength_cons in H.
+      omega.
+    - assert (a = a0) by (apply H0 with (i := 0); rewrite Zlength_cons; omega).
+      rewrite H2; apply f_equal, IHl with (d := d).
+      * repeat rewrite Zlength_cons in H; omega.
+      * intros; specialize H0 with (i := i + 1).
+        do 2 rewrite Znth_plus_1 in H0 by omega.
+        apply H0; rewrite Zlength_cons; omega.
+Qed.
+
+Lemma Znth_split_equiv {A}:
+  forall (l1 l2 l l':list A) k d,
+  (forall i, 0 <= i < k -> Znth i l1 d = Znth i l d) ->
+  (forall i, 0 <= i < k -> Znth i l1 d = Znth i l' d) ->
+  (forall i, k <= i -> Znth i l2 d = Znth i l d) ->
+  (forall i, k <= i -> Znth i l2 d = Znth i l' d) ->
+  Zlength l = Zlength l' ->
+  l = l'.
+Proof.
+  intros l1 l2 l l' k d l1_l_eq l1_l'_eq l2_l_eq l2_l'_eq len_eq.
+  apply Znth_equiv with (d0 := d); auto.
+  intros i len_bounds.
+  destruct (Z_lt_ge_dec i k).
+  + apply eq_trans with (y := Znth i l1 d).
+    - symmetry; apply l1_l_eq; omega.
+    - apply l1_l'_eq; omega.
+  + apply eq_trans with (y := Znth i l2 d).
+    - symmetry; apply l2_l_eq; omega.
+    - apply l2_l'_eq; omega.
 Qed.
 
 Lemma char_array_tail:
@@ -501,7 +550,8 @@ Proof.
         forall j,
         i <= j ->
         Znth j dst_arr 1 = Znth j dst_ini_arr 1;
-        0 <= i <= strlen src_arr)
+        0 <= i <= strlen src_arr;
+        c = Znth i src_arr 0)
    LOCAL (`(eq (Vint (Int.repr i))) (eval_id _i);
           `(eq (Vint (Int.sign_ext 8 (Int.repr c)))) (eval_id _c);
           `(eq src) (eval_id _src);
@@ -533,7 +583,16 @@ Proof.
   }
   {
     entailer!.
-    admit. (** FIXME **)
+    assert (strlen src_arr = i) by (apply cstring_end_lemma; auto).
+    rewrite Znth_split_equiv 
+      with (l := dst_arr) (l' := dst_fin_arr) (l1 := src_arr) (l2 := dst_ini_arr)
+           (k := strlen src_arr) (d := 1).
+    + entailer!.
+    + intros; rewrite H8; omega.
+    + intros; rewrite H4; omega.
+    + intros; rewrite H9; omega.
+    + intros; rewrite H5; omega.
+    + omega.
   }
   {
     forward.
@@ -546,7 +605,9 @@ Proof.
     forward.
     {
       entailer!.
-      + admit. (** FIXME **)
+      + assert (i < strlen src_arr) by (apply cstring_in_lemma; auto; omega).
+        assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+        omega.
       + apply typecast_aux_lemma; auto.
     }
     admit. (** FIXME **)
