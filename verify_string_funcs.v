@@ -597,9 +597,19 @@ Proof.
   {
     forward.
     {
-      entailer!.
-      + admit. (** FIXME **)
-      + instantiate (1 := Vint (Int.repr 1)); admit. (** FIXME **)
+      instantiate (1 := Vint (Int.sign_ext 8 (Int.repr (Znth i src_arr 0)))).
+      instantiate (2 := i).
+      assert (offset_val (Int.repr i) (eval_id _dst rho) =
+             force_val (sem_add_pi tschar (eval_id _dst rho) (eval_id _i rho))).
+      {
+        rewrite <-H13, sem_add_pi_ptr, mul_repr; case i; simpl; auto.
+      }
+      assert (Vint (Int.sign_ext 8 (Int.repr (Znth i src_arr 0))) =
+             force_val (sem_cast_i2i I8 Signed (eval_id _c rho))).
+      {
+        rewrite <-H14; simpl; rewrite Int.sign_ext_idem; auto; omega.
+      }
+      entailer.
     }
     forward.
     forward.
