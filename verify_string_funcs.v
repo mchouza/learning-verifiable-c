@@ -498,6 +498,20 @@ Proof.
     rewrite char_eq_is_false in char_eq; simpl in char_eq; discriminate.
 Qed.
 
+Lemma upd_lemma:
+  forall i k arr c,
+  0 <= i < Zlength arr ->
+  -128 <= c < 128 ->
+  (fun j => Vint (Int.repr (Znth j (upd_list arr i c) 1))) k =
+  (upd (fun j => Vint (Int.repr (Znth j arr 1))) i
+       (Vint (Int.sign_ext 8 (Int.repr c)))) k.
+Proof.
+  intros; rewrite signed_ext_idempotence by (compute; auto).
+  unfold upd; destruct (eq_dec i k); simpl.
+  + rewrite e, upd_list_change by omega; auto.
+  + rewrite upd_list_doesnt_change by auto; auto.
+Qed.
+
 Definition my_strlen_spec :=
   DECLARE _my_strlen
     WITH s_arr: list Z, sh: share, s: val
@@ -738,7 +752,11 @@ Proof.
       assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
       assert (i < strlen src_arr) by (apply cstring_in_lemma; auto).
       omega.
-    + admit. (** FIXME **)
+    + assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+      assert (-128 <= Znth i src_arr 0 < 128) by (apply H, Znth_in; omega).
+      rewrite upd_list_Zlength by omega.
+      apply array_at_ext'.
+      intros; symmetry; apply upd_lemma; omega.
   }
   forward.
 Qed.
