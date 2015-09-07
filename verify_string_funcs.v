@@ -7,6 +7,16 @@ Local Open Scope Z.
 Definition Znth {A} i l def := if i >=? 0 then nth (A := A) (Z.to_nat i) l def else def.
 Hint Unfold Znth.
 
+Fixpoint nat_upd_list {A} l n (a:A) :=
+  match n, l with
+  | _, nil => nil
+  | O, h :: t => a :: t
+  | S k, h :: t => h :: (nat_upd_list t k a)
+  end.
+
+Definition upd_list {A} l i a := if i >=? 0 then nat_upd_list (A := A) l (Z.to_nat i) a else l.
+Hint Unfold upd_list.
+
 Definition is_char_array (s:list Z) :=
   forall c, In c s -> -128 <= c < 128.
 
@@ -155,6 +165,94 @@ Proof.
   + apply eq_trans with (y := Znth i l2 d).
     - symmetry; apply l2_l_eq; omega.
     - apply l2_l'_eq; omega.
+Qed.
+
+Lemma upd_list_nil {A}:
+  forall i (a:A),
+  upd_list nil i a = nil.
+Proof.
+  intros; unfold upd_list; destruct i; simpl; auto.
+  case (Pos.to_nat p); auto.
+Qed.
+
+Lemma upd_list_plus_1 {A}:
+  forall l i (a b:A),
+  i >= 0 ->
+  upd_list (a :: l) (i + 1) b = a :: (upd_list l i b).
+Proof.
+  intros; unfold upd_list; simpl.
+  assert (i + 1 = Z.succ i) as succ_eq by omega.
+  assert (i + 1 >=? 0 = true) as cond_eq_true by (apply Z.geb_le; omega).
+  assert (i >=? 0 = true) as cond_eq_true' by (apply Z.geb_le; omega).
+  rewrite cond_eq_true, cond_eq_true', succ_eq, Z2Nat.inj_succ by omega; auto.
+Qed.
+
+Lemma upd_list_Zlength {A}:
+  forall l i (a:A),
+  Zlength (upd_list l i a) = Zlength l.
+Proof.
+  induction l.
+  + intros; rewrite upd_list_nil; auto.
+  + intros; destruct i.
+    - unfold upd_list; simpl; repeat rewrite Zlength_cons; auto.
+    - remember (Z.pos p) as i.
+      assert (i = i - 1 + 1) as i_eq by omega.
+      assert (i > 0) by (rewrite Heqi; apply Zgt_pos_0).
+      rewrite i_eq, upd_list_plus_1 by omega.
+      repeat rewrite Zlength_cons; rewrite IHl by omega; auto.
+    - unfold upd_list; simpl; auto.
+Qed.
+
+Lemma upd_list_doesnt_change {A}:
+  forall l i j (a:A) d,
+  i <> j ->
+  Znth j (upd_list l i a) d = Znth j l d.
+Proof.
+  induction l.
+  + intros; rewrite upd_list_nil; auto.
+  + intros.
+    assert (i = i - 1 + 1) as i_eq by omega.
+    assert (j = j - 1 + 1) as j_eq by omega.
+    destruct j.
+    - destruct i.
+      * intros; omega.
+      * remember (Z.pos p) as i; assert (i > 0) by (rewrite Heqi; apply Zgt_pos_0).
+        rewrite i_eq, upd_list_plus_1 by omega.
+        repeat rewrite Znth_0; auto.
+      * unfold upd_list; simpl; auto.
+    - destruct i.
+      * remember (Z.pos p) as j; assert (j > 0) by (rewrite Heqj; apply Zgt_pos_0).
+        unfold upd_list; simpl.
+        rewrite j_eq by omega.
+        repeat rewrite Znth_plus_1 by omega; auto.
+      * remember (Z.pos p) as j; assert (j > 0) by (rewrite Heqj; apply Zgt_pos_0).
+        remember (Z.pos p0) as i; assert (i > 0) by (rewrite Heqi; apply Zgt_pos_0).
+        rewrite i_eq, j_eq, upd_list_plus_1 by omega.
+        repeat rewrite Znth_plus_1 by omega.
+        apply IHl; omega.
+      * unfold upd_list; simpl; auto.
+    - unfold Znth; simpl; auto.
+Qed.
+
+Lemma upd_list_change {A}:
+  forall l i (a:A) d,
+  0 <= i < Zlength l ->
+  Znth i (upd_list l i a) d = a.
+Proof.
+  induction l.
+  + rewrite Zlength_nil; intros; omega.
+  + destruct i.
+    - unfold upd_list; simpl; intros; rewrite Znth_0; auto.
+    - intros; remember (Z.pos p) as i.
+      assert (i = i - 1 + 1) as i_eq by omega.
+      assert (i > 0) by (rewrite Heqi; apply Zgt_pos_0).
+      rewrite i_eq, upd_list_plus_1 by omega.
+      rewrite Znth_plus_1 by omega.
+      apply IHl.
+      rewrite Zlength_cons in H; omega.
+    - intros.
+      assert (Z.neg p < 0) by apply Zlt_neg_0.
+      omega.
 Qed.
 
 Lemma char_array_tail:
@@ -620,7 +718,27 @@ Proof.
         omega.
       + apply typecast_aux_lemma; auto.
     }
-    admit. (** FIXME **)
+    apply exp_right with (i + 1).
+    apply exp_right with (Znth (i + 1) src_arr 0).
+    apply exp_right with (upd_list dst_arr i c).
+    entailer!.
+    + rewrite upd_list_Zlength; auto.
+    + intros; destruct (eq_dec x i).
+      - rewrite e, upd_list_change by omega.
+        apply Znth_def_indep.
+        assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+        omega.
+      - rewrite upd_list_doesnt_change by omega.
+        apply H8; omega.
+    + intros; rewrite upd_list_doesnt_change by omega.
+      apply H9; omega.
+    + assert (i < strlen src_arr) by (apply cstring_in_lemma; auto).
+      omega.
+    + rewrite Znth_def_indep with (d2 := 1); auto.
+      assert (0 <= strlen src_arr < Zlength src_arr) by (apply cstring_strlen_bounds; auto).
+      assert (i < strlen src_arr) by (apply cstring_in_lemma; auto).
+      omega.
+    + admit. (** FIXME **)
   }
   forward.
 Qed.
