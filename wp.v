@@ -91,6 +91,29 @@ Proof.
       * discriminate.
 Qed.
 
+Lemma open_close_insert:
+  forall l n,
+  l <> nil ->
+  wp ((rep_open n) ++ l) ->
+  wp ((rep_open (S n)) ++ close :: l).
+Proof.
+  intros l n l_non_nil wp_ron_l.
+  remember (rep_open n ++ l) as ron_l.
+  induction wp_ron_l.
+  + assert (rep_open n = nil /\ l = nil) as [ron_is_nil l_is_nil] by (apply app_eq_nil; auto).
+    simpl; rewrite l_is_nil, ron_is_nil.
+    apply wp_p, wp_e.
+  + assert (last l open = close) as l_ends_with_close.
+    {
+      rewrite <-app_last with (l1 := rep_open n), <-Heqron_l by auto.
+      rewrite app_comm_cons, app_last.
+      + simpl; auto.
+      + discriminate.
+    }
+    admit. (** FIXME **)
+  + admit. (** FIXME **)
+Qed.
+
 Lemma open_close_keeps_wp:
   forall l n, wp ((rep_open n) ++ l) -> wp ((rep_open (S n)) ++ close :: l).
 Proof.
@@ -114,13 +137,12 @@ Proof.
     destruct l, n; simpl; intros.
     + apply wp_open_close.
     + rewrite app_comm_cons; apply wp_p; rewrite <-app_nil_r; auto.
-    + rewrite <-cons_eq with (p := open).
-      rewrite <-cons_eq with (p := close).
-      do 2 rewrite app_comm_cons; rewrite app_assoc, <-app_comm_cons, cons_eq.
-      apply wp_c.
-      - apply wp_open_close.
-      - auto.
-    + admit. (** FIXME **)
+    + apply open_close_insert with (n := 0).
+      - discriminate.
+      - simpl; auto.
+    + apply open_close_insert with (n := (S n)).
+      - discriminate.
+      - simpl; auto.
   }
 Qed.
 
