@@ -22,6 +22,17 @@ Proof.
     - simpl; omega.
 Qed.
 
+Lemma removelast_length {A}:
+  forall (l:list A),
+  l <> nil -> S (length (removelast l)) = length l.
+Proof.
+  induction l.
+  + intros Habs; exfalso; apply Habs; auto.
+  + destruct l as [|b l].
+    - intros; simpl; auto.
+    - intros; simpl in *; apply f_equal, IHl; discriminate.
+Qed.
+
 Inductive paren :=
   | open
   | close.
@@ -91,29 +102,6 @@ Proof.
       * discriminate.
 Qed.
 
-Lemma open_close_insert:
-  forall l n,
-  l <> nil ->
-  wp ((rep_open n) ++ l) ->
-  wp ((rep_open (S n)) ++ close :: l).
-Proof.
-  intros l n l_non_nil wp_ron_l.
-  remember (rep_open n ++ l) as ron_l.
-  induction wp_ron_l.
-  + assert (rep_open n = nil /\ l = nil) as [ron_is_nil l_is_nil] by (apply app_eq_nil; auto).
-    simpl; rewrite l_is_nil, ron_is_nil.
-    apply wp_p, wp_e.
-  + assert (last l open = close) as l_ends_with_close.
-    {
-      rewrite <-app_last with (l1 := rep_open n), <-Heqron_l by auto.
-      rewrite app_comm_cons, app_last.
-      + simpl; auto.
-      + discriminate.
-    }
-    admit. (** FIXME **)
-  + admit. (** FIXME **)
-Qed.
-
 Lemma open_close_keeps_wp:
   forall l n, wp ((rep_open n) ++ l) -> wp ((rep_open (S n)) ++ close :: l).
 Proof.
@@ -134,15 +122,61 @@ Proof.
     + rewrite app_comm_cons; apply wp_p; rewrite <-app_nil_r; auto.
   }
   {
-    destruct l, n; simpl; intros.
-    + apply wp_open_close.
-    + rewrite app_comm_cons; apply wp_p; rewrite <-app_nil_r; auto.
-    + apply open_close_insert with (n := 0).
-      - discriminate.
-      - simpl; auto.
-    + apply open_close_insert with (n := (S n)).
-      - discriminate.
-      - simpl; auto.
+    intros; remember (rep_open n ++ l) as ronl.
+    induction H0.
+    {
+      assert (rep_open n = nil /\ l = nil) as [ron_is_nil l_is_nil] by (apply app_eq_nil; auto).
+      simpl; rewrite ron_is_nil, l_is_nil; apply wp_p, wp_e.
+    }
+    {
+      destruct n, l.
+      + simpl rep_open; rewrite <-app_comm_cons; apply wp_p, wp_e.
+      + assert (rep_open 1 ++ close :: p :: l = ((open :: nil ++ close :: nil) ++ (rep_open 0 ++ p :: l))) as Heq
+          by (simpl; auto).
+        rewrite Heq; apply wp_c.
+        - apply wp_p, wp_e.
+        - rewrite <-Heqronl; apply wp_p; auto.
+      + simpl rep_open in *; rewrite <-app_comm_cons; apply wp_p; rewrite <-app_nil_r.
+        rewrite <-Heqronl; apply wp_p; auto.
+      + rewrite app_removelast_last with (d := open) (l := p :: l) by discriminate.
+        rewrite <-app_last with (l1 := rep_open (S n)) by discriminate.
+        rewrite <-Heqronl, app_comm_cons with (y := close :: nil), app_last by discriminate.
+        simpl last; simpl rep_open.
+        assert ((open :: open :: rep_open n) ++ close :: removelast (p :: l) ++ close :: nil =
+                open :: (open :: rep_open n ++ close :: removelast (p :: l)) ++ close :: nil) as Heq
+          by (repeat rewrite app_comm_cons; repeat rewrite app_assoc; auto).
+        rewrite Heq; apply wp_p.
+        assert (open :: rep_open n = rep_open (S n)) as ron_eq by (simpl; auto).
+        rewrite app_comm_cons, ron_eq.
+        apply IHm.
+        - assert (S (length (removelast (p :: l))) = length (p :: l)) as len_eq
+            by (apply removelast_length; discriminate).
+          omega.
+        - assert (last (p :: l) open = close) as close_eq.
+          {
+            rewrite <-app_last with (l1 := rep_open (S n)), <-Heqronl by discriminate.
+            rewrite app_comm_cons, app_last by discriminate; auto.
+          }
+          assert (rep_open n ++ removelast (p :: l) = l0) as l0_eq.
+          {
+            apply app_inv_tail with (l := last (p :: l) open :: nil).
+            rewrite <-app_assoc, <-app_removelast_last by discriminate.
+            apply app_inv_head with (l := open :: nil); simpl app at 1.
+            rewrite app_comm_cons, ron_eq, <-Heqronl; simpl app at 1.
+            do 2 apply f_equal.
+            rewrite close_eq; auto.
+          }
+          rewrite l0_eq; auto.
+    } 
+    {
+      destruct n.
+      + simpl rep_open in Heqronl; rewrite app_nil_l in Heqronl.
+        assert (rep_open 1 ++ close :: l = ((open :: nil ++ close :: nil) ++ l)) as l_eq by auto.
+        rewrite l_eq; apply wp_c.
+        - apply wp_p, wp_e.
+        - rewrite <-Heqronl; apply wp_c; auto. 
+      + admit. (** FIXME **)
+    }
   }
 Qed.
 
