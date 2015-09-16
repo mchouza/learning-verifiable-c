@@ -1,6 +1,15 @@
 Require Import List.
 Require Import Omega.
 
+Lemma app_hd {A}:
+  forall (l1 l2:list A) d,
+  l1 <> nil -> hd d (l1 ++ l2) = hd d l1.
+Proof.
+  intros l1 l2 d l1_non_nil; destruct l1.
+  + exfalso; apply l1_non_nil; auto.
+  + rewrite <-app_comm_cons; simpl; auto.
+Qed.
+
 Lemma app_last {A}:
   forall (l1 l2:list A) d,
   l2 <> nil -> last (l1 ++ l2) d = last l2 d.
@@ -22,6 +31,70 @@ Proof.
     - simpl; omega.
 Qed.
 
+Lemma app_firstn {A}:
+  forall n (l1 l2:list A),
+  n <= length l1 -> firstn n (l1 ++ l2) = firstn n l1.
+Proof.
+  induction n.
+  + auto.
+  + destruct l1.
+    - simpl in *; intros; omega.
+    - intros; rewrite <-app_comm_cons; simpl in *; rewrite IHn by omega; auto.
+Qed.
+
+Lemma app_firstn' {A}:
+  forall n (l1 l2:list A),
+  length l1 <= n -> firstn n (l1 ++ l2) = l1 ++ (firstn (n - length l1) l2).
+Proof.
+  induction n.
+  + destruct l1; simpl; auto; intros; omega.
+  + destruct l1.
+    - simpl; auto.
+    - intros; simpl in *; rewrite IHn; auto; omega.
+Qed.
+
+Lemma app_skipn {A}:
+  forall n (l1 l2:list A),
+  n <= length l1 -> skipn n (l1 ++ l2) = (skipn n l1) ++ l2.
+Proof.
+  induction n.
+  + auto.
+  + destruct l1.
+    - simpl in *; intros; omega.
+    - intros; rewrite <-app_comm_cons; simpl in *; rewrite IHn by omega; auto.
+Qed.
+
+Lemma app_skipn' {A}:
+  forall n (l1 l2:list A),
+  length l1 <= n -> skipn n (l1 ++ l2) = skipn (n - length l1) l2.
+Proof.
+  induction n.
+  + destruct l1; auto; simpl; intros; omega.
+  + destruct l1.
+    - intros; simpl app; simpl length; rewrite <-minus_n_O; auto.
+    - simpl; intros; rewrite IHn; auto; omega.
+Qed.
+
+Lemma firstn_whole {A}:
+  forall n (l:list A),
+  length l <= n -> firstn n l = l.
+Proof.
+  induction n.
+  + destruct l; auto; simpl; intros; omega.
+  + destruct l.
+    - auto.
+    - simpl; intros; rewrite IHn by omega; auto.
+Qed.
+
+Lemma hd_skip1_cons {A}:
+  forall (l:list A) d,
+  l <> nil -> (hd d l) :: (skipn 1 l) = l.
+Proof.
+  intros; destruct l.
+  + exfalso; apply H; auto.
+  + simpl; auto.
+Qed.
+
 Lemma removelast_length {A}:
   forall (l:list A),
   l <> nil -> S (length (removelast l)) = length l.
@@ -31,6 +104,17 @@ Proof.
   + destruct l as [|b l].
     - intros; simpl; auto.
     - intros; simpl in *; apply f_equal, IHl; discriminate.
+Qed.
+
+Lemma skipn_length {A}:
+  forall (l:list A) n,
+  length (skipn n l) = length l - n.
+Proof.
+  induction l.
+  + intros; case n; auto.
+  + destruct n.
+    - auto.
+    - intros; simpl in *; apply IHl; omega.
 Qed.
 
 Inductive paren :=
@@ -84,6 +168,20 @@ Proof.
     repeat rewrite <-app_comm_cons; auto.
 Qed.
 
+Lemma wp_non_nil_starts_open:
+  forall l d, wp l -> l <> nil -> hd d l = open.
+Proof.
+  intros l d wp_l l_non_nil.
+  induction wp_l.
+  + exfalso; apply l_non_nil; auto.
+  + simpl; auto.
+  + destruct l1, l2.
+    - simpl in l_non_nil; exfalso; apply l_non_nil; auto.
+    - simpl; apply IHwp_l2; discriminate.
+    - simpl; apply IHwp_l1; discriminate.
+    - simpl; apply IHwp_l1; discriminate.
+Qed.
+
 Lemma wp_non_nil_ends_close:
   forall l d, wp l -> l <> nil -> last l d = close.
 Proof.
@@ -102,83 +200,138 @@ Proof.
       * discriminate.
 Qed.
 
-Lemma open_close_keeps_wp:
-  forall l n, wp ((rep_open n) ++ l) -> wp ((rep_open (S n)) ++ close :: l).
+Lemma open_close_ins_keeps_wp:
+  forall l l', wp (l ++ l') -> wp (l ++ open :: close :: nil ++ l').
 Proof.
-  assert (forall (p:paren) l, p :: nil ++ l = p :: l) as cons_eq by auto.
-  assert (wp (open :: close :: nil)) as wp_open_close by
-    (rewrite <-cons_eq; apply wp_p, wp_e).
-  cut (forall m l n,
-       length l <= m ->
-       wp (rep_open n ++ l) ->
-       wp (rep_open (S n) ++ close :: l)).
+  (* useful general assertion *)
+  assert (wp (open :: close :: nil)) as wp_oc.
   {
-    intros H l n; apply H with (m := length l); omega.
+    assert (open :: close :: nil = (open :: nil) ++ (close :: nil)) as oc_eq by (simpl; auto).
+    rewrite oc_eq; apply wp_p, wp_e.
   }
-  induction m.
+  (* we do length induction *)
+  cut (forall n l l', length (l ++ l') <= n -> wp (l ++ l') -> wp (l ++ open :: close :: nil ++ l')).
   {
-    destruct l, n; simpl; intros; try omega.
-    + apply wp_open_close.
-    + rewrite app_comm_cons; apply wp_p; rewrite <-app_nil_r; auto.
+    intros H l l'; apply H with (n := length (l ++ l')); omega.
+  }
+  induction n.
+  {
+    (* trivial length 0 case *)
+    destruct l, l'; simpl; intros; try omega.
+    apply wp_oc.
   }
   {
-    intros; remember (rep_open n ++ l) as ronl.
-    induction H0.
+    (* now we do induction in the wp cases *)
+    intros l l' ll'_length_bounds wp_ll'.
+    remember (l ++ l') as ll'.
+    induction wp_ll'.
     {
-      assert (rep_open n = nil /\ l = nil) as [ron_is_nil l_is_nil] by (apply app_eq_nil; auto).
-      simpl; rewrite ron_is_nil, l_is_nil; apply wp_p, wp_e.
+      (* nil case is trivial *)
+      assert (l = nil /\ l' = nil) as [l_is_nil l'_is_nil] by (apply app_eq_nil; auto).
+      rewrite l_is_nil, l'_is_nil; simpl; apply wp_oc.
     }
     {
-      destruct n, l.
-      + simpl rep_open; rewrite <-app_comm_cons; apply wp_p, wp_e.
-      + assert (rep_open 1 ++ close :: p :: l = ((open :: nil ++ close :: nil) ++ (rep_open 0 ++ p :: l))) as Heq
-          by (simpl; auto).
+      (* the parenthesized one, not so much: we need to start by disposing of the easy cases first *)
+      destruct l, l'.
+      + simpl; apply wp_oc.
+      + assert (nil ++ open :: close :: nil ++ p :: l' = (open :: close :: nil) ++ p :: l') as Heq by auto.
         rewrite Heq; apply wp_c.
-        - apply wp_p, wp_e.
-        - rewrite <-Heqronl; apply wp_p; auto.
-      + simpl rep_open in *; rewrite <-app_comm_cons; apply wp_p; rewrite <-app_nil_r.
-        rewrite <-Heqronl; apply wp_p; auto.
-      + rewrite app_removelast_last with (d := open) (l := p :: l) by discriminate.
-        rewrite <-app_last with (l1 := rep_open (S n)) by discriminate.
-        rewrite <-Heqronl, app_comm_cons with (y := close :: nil), app_last by discriminate.
-        simpl last; simpl rep_open.
-        assert ((open :: open :: rep_open n) ++ close :: removelast (p :: l) ++ close :: nil =
-                open :: (open :: rep_open n ++ close :: removelast (p :: l)) ++ close :: nil) as Heq
-          by (repeat rewrite app_comm_cons; repeat rewrite app_assoc; auto).
-        rewrite Heq; apply wp_p.
-        assert (open :: rep_open n = rep_open (S n)) as ron_eq by (simpl; auto).
-        rewrite app_comm_cons, ron_eq.
-        apply IHm.
-        - assert (S (length (removelast (p :: l))) = length (p :: l)) as len_eq
-            by (apply removelast_length; discriminate).
-          omega.
-        - assert (last (p :: l) open = close) as close_eq.
+        - apply wp_oc.
+        - rewrite <-app_nil_l, <-Heqll'; apply wp_p; auto.
+      + assert ((p :: l) ++ open :: close :: nil ++ nil = (p :: l) ++ (open :: close :: nil)) as Heq by auto.
+        rewrite Heq; apply wp_c.
+        - rewrite <-app_nil_r, <-Heqll'; apply wp_p; auto.
+        - apply wp_oc.
+      (* now that we are in the main case, we start by showing the expression follows the
+         open :: x ++ close :: nil shape *)
+      + assert (p = open) as p_is_open.
+        {
+          assert (p = hd close ((p :: l) ++ p0 :: l')) as p_eq by auto.
+          assert (open = hd close (open :: l0 ++ close :: nil)) as open_eq by auto.
+          rewrite p_eq, open_eq, Heqll'; auto.
+        }
+        assert (last (p0 :: l') open = close) as last_is_close.
+        {
+          assert (last (p0 :: l') open = last ((p :: l) ++ p0 :: l') open) as last_eq
+            by (rewrite app_last by discriminate; auto).
+          assert (close = last (open :: l0 ++ close :: nil) open) as close_eq 
+            by (rewrite app_comm_cons, app_last by discriminate; auto).
+          rewrite last_eq, close_eq, Heqll'; auto.
+        }
+        rewrite p_is_open, app_removelast_last with (d := open) (l := p0 :: l'), last_is_close
+          by discriminate.
+        assert ((open :: l) ++ open :: close :: nil ++ removelast (p0 :: l') ++ close :: nil =
+                open :: (l ++ open :: close :: nil ++ removelast (p0 :: l')) ++ close :: nil) as Heq.
+        repeat (repeat rewrite app_assoc; repeat rewrite app_comm_cons); auto.
+        (* now we can apply the usual machinery to shrink the string and call the inductive hypothesis *)
+        rewrite Heq; apply wp_p, IHn.
+        (* we have to prove the shrinking *)
+        - assert (S(length(removelast (p0 :: l'))) = S(length l')) as removelast_len_eq
+            by (rewrite removelast_length; try discriminate; auto).
+          rewrite Heqll', app_length in ll'_length_bounds; simpl in ll'_length_bounds.
+          rewrite app_length; omega.
+        (* then we have to prove everything is well founded *)
+        - assert (l0 = l ++ removelast (p0 :: l')) as l0_eq.
           {
-            rewrite <-app_last with (l1 := rep_open (S n)), <-Heqronl by discriminate.
-            rewrite app_comm_cons, app_last by discriminate; auto.
-          }
-          assert (rep_open n ++ removelast (p :: l) = l0) as l0_eq.
-          {
-            apply app_inv_tail with (l := last (p :: l) open :: nil).
-            rewrite <-app_assoc, <-app_removelast_last by discriminate.
             apply app_inv_head with (l := open :: nil); simpl app at 1.
-            rewrite app_comm_cons, ron_eq, <-Heqronl; simpl app at 1.
-            do 2 apply f_equal.
-            rewrite close_eq; auto.
+            apply app_inv_tail with (l := close :: nil).
+            rewrite <-app_comm_cons, Heqll', <-p_is_open, <-last_is_close.
+            repeat rewrite <-app_assoc; rewrite <-app_removelast_last by discriminate.
+            simpl; auto.
           }
-          rewrite l0_eq; auto.
-    } 
+          rewrite <-l0_eq; auto.
+    }
     {
-      destruct n.
-      + simpl rep_open in Heqronl; rewrite app_nil_l in Heqronl.
-        assert (rep_open 1 ++ close :: l = ((open :: nil ++ close :: nil) ++ l)) as l_eq by auto.
-        rewrite l_eq; apply wp_c.
-        - apply wp_p, wp_e.
-        - rewrite <-Heqronl; apply wp_c; auto. 
-      + admit. (** FIXME **)
+      (* the concatenation case *)
+      (* we need to dispose of the easy cases *)
+      destruct l1, l2.
+      + apply IHwp_ll'1; auto; rewrite <-Heqll'.
+      + apply IHwp_ll'2; auto; rewrite <-Heqll'.
+      + apply IHwp_ll'1; rewrite app_nil_r in *; try omega; rewrite <-Heqll'; auto.
+      (* this is the main case *)
+      (* we need to handle the two cases, depending on where the added open :: close falls *)
+      + destruct (le_dec (length (p :: l1)) (length l)).
+        (* the easiest one: the open :: close is entirely beyond the first component *)
+        - rewrite <-firstn_skipn with (n := length (p :: l1)).
+          rewrite app_firstn, app_skipn by auto.
+          assert (firstn (length (p :: l1)) l = p :: l1) as l1_eq.
+          {
+            erewrite <-app_firstn by auto; instantiate (1 := l').
+            rewrite <-Heqll', app_firstn, firstn_whole by auto; auto.
+          }
+          assert (skipn (length (p :: l1)) l ++ l' = p0 :: l2) as l2_eq.
+          {
+            apply app_inv_head with (l := p :: l1).
+            rewrite <-l1_eq, app_assoc, firstn_skipn, Heqll' at 1; auto.
+          }
+          rewrite l1_eq; apply wp_c, IHn; auto.
+          * rewrite app_length, skipn_length.
+            rewrite Heqll', app_length in ll'_length_bounds.
+            assert (length (p :: l1) > 0) by (simpl; omega).
+            omega.
+          * rewrite l2_eq; auto.
+        (* the open :: close falls in the middle or on the first component entirely *)
+        - rewrite <-firstn_skipn with (n := length (p :: l1) + 2).
+          rewrite app_firstn', app_skipn' by omega.
+          assert (length (p :: l1) + 2 - length l - 2 = length (p :: l1) - length l) as len_eq by omega.
+          assert (skipn (length (p :: l1) + 2 - length l) (open :: close :: nil ++ l') = p0 :: l2) as l2_eq.
+          {
+            do 2 rewrite app_comm_cons; rewrite app_skipn' by (simpl length at 1; omega); simpl length at 3.  
+            rewrite len_eq, <-app_skipn' by omega.
+            apply app_inv_head with (l := p :: l1).
+            rewrite <-Heqll', app_skipn', <-minus_n_n by auto; auto.
+          }
+          assert (l ++ firstn (length (p :: l1) - length l) l' = p :: l1) as l1_eq
+            by (rewrite <-app_firstn', <-Heqll', app_firstn, firstn_whole by omega; auto).
+          rewrite l2_eq; apply wp_c; auto.
+          do 2 rewrite app_comm_cons; rewrite app_firstn' by (simpl length at 1; omega); simpl length at 3.
+          rewrite len_eq.
+          apply IHn.
+          admit. (** FIXME **)
+          admit. (** FIXME **)
     }
   }
-Qed.
+Qed.    
 
 Lemma is_wp_implies_wp_aux:
   forall l n, is_wp_aux l n = true -> wp ((rep_open n) ++ l).
@@ -194,7 +347,10 @@ Proof.
     + rewrite rep_open_split_last; apply IHl; simpl in *; auto.
     + destruct n.
       - simpl in *; discriminate.
-      - simpl in *; apply open_close_keeps_wp, IHl; auto.
+      - assert (rep_open (S n) ++ close :: l = rep_open n ++ open :: close :: nil ++ l) as Heq
+          by (rewrite <-rep_open_split_last; simpl; auto).
+        rewrite Heq.
+        apply open_close_ins_keeps_wp, IHl; simpl in *; auto.
   }
 Qed.
 
