@@ -326,9 +326,9 @@ Proof.
           rewrite l2_eq; apply wp_c; auto.
           do 2 rewrite app_comm_cons; rewrite app_firstn' by (simpl length at 1; omega); simpl length at 3.
           rewrite len_eq.
-          apply IHn.
-          admit. (** FIXME **)
-          admit. (** FIXME **)
+          apply IHn; rewrite <-app_firstn', <-Heqll', app_firstn, firstn_whole by omega.
+          * rewrite app_length in ll'_length_bounds; simpl in *; omega.
+          * auto.
     }
   }
 Qed.    
